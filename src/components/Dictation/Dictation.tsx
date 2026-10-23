@@ -60,13 +60,19 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
       if(e.key!=='Meta')return;
       const gesture=commandGesture.current;commandGesture.current=null;
       if(!gesture||gesture.used||e.isComposing||busy||editing||!sentence||!original)return;
-      if((e.target as HTMLElement|null)?.closest('[role=separator]'))return;
+      if(document.activeElement?.closest('[role=separator]'))return;
       e.preventDefault();next(1);inputRef.current?.focus();
     };
+    const modifier=(event:Event)=>{
+      const {command,other}=(event as CustomEvent<{command:boolean;other:boolean}>).detail;
+      if(command){handle(new KeyboardEvent('keydown',{key:'Meta',metaKey:true,shiftKey:other}));if(other&&commandGesture.current)commandGesture.current.used=true;}
+      else release(new KeyboardEvent('keyup',{key:'Meta'}));
+    };
+    window.addEventListener('aboboo-command-modifier',modifier);
     const cancel=()=>{commandGesture.current=null;};
     const pointer=()=>{if(commandGesture.current)commandGesture.current.used=true;};
     window.addEventListener('keydown',handle);window.addEventListener('keyup',release);window.addEventListener('blur',cancel);window.addEventListener('pointerdown',pointer);
-    return()=>{window.removeEventListener('keydown',handle);window.removeEventListener('keyup',release);window.removeEventListener('blur',cancel);window.removeEventListener('pointerdown',pointer);};
+    return()=>{window.removeEventListener('aboboo-command-modifier',modifier);window.removeEventListener('keydown',handle);window.removeEventListener('keyup',release);window.removeEventListener('blur',cancel);window.removeEventListener('pointerdown',pointer);};
   });
   if(!project||!original)return null;
   const update=(changes:Partial<Sentence>)=>{if(!sentence)return;updateProject({dictation:{...project.dictation!,sentences:items.map((s,i)=>i===index?{...s,...changes}:s)}});};

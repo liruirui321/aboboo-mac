@@ -1,8 +1,15 @@
 mod commands;
+#[cfg(target_os = "macos")]
+mod command_key;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            #[cfg(target_os = "macos")]
+            command_key::install(app);
+            Ok(())
+        })
         .manage(commands::transcribe::AsrState::default())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
