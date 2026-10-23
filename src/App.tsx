@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
 import { audioEngine } from './services/audioEngine';
@@ -12,40 +13,59 @@ export default function App() {
   const { project, setProject, setBlobUrl, setBlobUrls, recordingBlobs, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
 
+  const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   const reportError = (error: unknown) => setError('操作失败：' + String(error));
 
   const handleOpenFile = async () => {
     const selected = await open({
-      filters: [{ name: 'Audio', extensions: ['mp3', 'wav', 'ogg', 'm4a'] }],
+      filters: [{ name: '音频', extensions: ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'aif', 'aiff', 'mp4'] }, { name: '所有文件', extensions: ['*'] }],
       multiple: false,
     });
     if (!selected || typeof selected !== 'string') return;
 
-    const bytes = await readFile(selected);
-    const ext = selected.split('.').pop() ?? 'mp3';
-    const mime = ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : ext === 'm4a' ? 'audio/mp4' : 'audio/ogg';
-    const blob = new Blob([bytes], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const arrayBuffer = await blob.arrayBuffer();
+    setError('');
+    setLoading('正在检查音频…');
+    let url: string | null = null;
+    try {
+      await invoke('inspect_audio_file', { path: selected });
+      setLoading('正在读取音频…');
+      const bytes = await readFile(selected);
+      const ext = selected.split('.').pop()?.toLowerCase() ?? '';
+      const mime = ({mp3:'audio/mpeg', wav:'audio/wav', m4a:'audio/mp4', mp4:'audio/mp4', aac:'audio/aac', flac:'audio/flac', aif:'audio/aiff', aiff:'audio/aiff', ogg:'audio/ogg'} as Record<string, string>)[ext] || 'application/octet-stream';
+      const blob = new Blob([bytes], { type: mime });
+      url = URL.createObjectURL(blob);
+      const arrayBuffer = await blob.arrayBuffer();
 
-    const newProject = projectService.createProject(
-      selected.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Project',
-      selected,
-      0,
-    );
+      const newProject = projectService.createProject(
+        selected.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'Project',
+        selected,
+        0,
+      );
 
-    const duration = await audioEngine.loadAudio(newProject.tracks[0].id, arrayBuffer);
-    newProject.tracks[0].duration = duration;
-    newProject.duration = duration;
+      setLoading('正在解码音频，较长录音可能需要一些时间…');
+      let duration: number;
+      try {
+        duration = await audioEngine.loadAudio(newProject.tracks[0].id, arrayBuffer);
+      } catch {
+        throw new Error('无法解码此音频。文件可能损坏，或当前系统不支持它的编码；请转换为 MP3 / WAV 后重试。');
+      }
+      newProject.tracks[0].duration = duration;
+      newProject.duration = duration;
 
-    audioEngine.stop();
-    useProjectStore.getState().clear();
-    usePlayerStore.getState().setIsPlaying(false);
-    setProject(newProject);
-    setBlobUrl(newProject.tracks[0].id, url);
-    setDuration(duration);
-    setCurrentTime(0);
+      audioEngine.stop();
+      useProjectStore.getState().clear();
+      usePlayerStore.getState().setIsPlaying(false);
+      setProject(newProject);
+      setBlobUrl(newProject.tracks[0].id, url);
+      addRecordingBlob(newProject.tracks[0].id, blob);
+      url = null;
+      setDuration(duration);
+      setCurrentTime(0);
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+      setLoading('');
+    }
   };
 
   const handleSave = async () => {
@@ -82,14 +102,15 @@ export default function App() {
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: '#16213e', borderBottom: '1px solid #333' }}>
         <span style={{ fontWeight: 600, fontSize: 16, marginRight: 8 }}>Aboboo 社区版</span>
-        <button onClick={() => handleOpenFile().catch(reportError)} disabled={usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
-        <button onClick={() => handleLoadProject().catch(reportError)} disabled={usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
-        <button onClick={() => handleSave().catch(reportError)} disabled={!project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
+        <button onClick={() => handleOpenFile().catch(reportError)} disabled={!!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
+        <button onClick={() => handleLoadProject().catch(reportError)} disabled={!!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
+        <button onClick={() => handleSave().catch(reportError)} disabled={!!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
         {project && (
           <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>{project.name}</span>
         )}
       </div>
 
+      {loading && <div role="status" style={{padding:12, color:'#a9cfff'}}>{loading}</div>}
       {error && <div role="alert" style={{padding:12, color:'#ffb4ab'}} onClick={() => setError('')}>{error}（点击关闭）</div>}
       {/* Timeline */}
       {project ? (

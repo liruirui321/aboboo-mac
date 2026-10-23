@@ -8,6 +8,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             commands::project::get_app_data_dir,
+            commands::project::inspect_audio_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-10-23
+
+- Detect macOS cloud placeholders before attempting audio reads.
+- Show import stages and actionable decode errors.
+- Expand file picker filters and handle uppercase extensions.
+- Retain imported audio bytes for saving, avoiding a second dependency on the source file.
+- Add regression coverage for cloud placeholder errors followed by successful import.
+
 ## 0.2.0 — 2026-10-23
 
 - Add A–B repeat, 0.5–2× playback and Space / Esc / [ / ] shortcuts.
