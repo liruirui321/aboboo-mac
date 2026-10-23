@@ -6,6 +6,7 @@ export class AudioEngine {
   private startedAt = 0;
   private pausedAt = 0;
   private playing = false;
+  private rate = 1;
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
@@ -35,24 +36,24 @@ export class AudioEngine {
 
       const source = ctx.createBufferSource();
       source.buffer = buffer;
+      source.playbackRate.value = this.rate;
       source.connect(gain);
 
       const trackOffset = Math.max(0, offset - track.startTime);
-      const when = ctx.currentTime + Math.max(0, track.startTime - offset);
+      const when = ctx.currentTime + Math.max(0, track.startTime - offset) / this.rate;
       source.start(when, trackOffset);
 
       this.sources.set(track.id, source);
       this.gainNodes.set(track.id, gain);
     }
 
-    this.startedAt = ctx.currentTime - offset;
+    this.startedAt = ctx.currentTime;
     this.playing = true;
   }
 
   pause() {
     if (!this.playing) return;
-    const ctx = this.getCtx();
-    this.pausedAt = ctx.currentTime - this.startedAt;
+    this.pausedAt = this.getCurrentTime();
     this.playing = false;
     this.sources.forEach(s => { try { s.stop(0); } catch {} });
     this.sources.forEach(s => s.disconnect());
@@ -76,11 +77,18 @@ export class AudioEngine {
   getCurrentTime(): number {
     if (!this.ctx) return 0;
     if (!this.playing) return this.pausedAt;
-    return this.ctx.currentTime - this.startedAt;
+    return this.pausedAt + (this.ctx.currentTime - this.startedAt) * this.rate;
   }
 
   isPlaying(): boolean {
     return this.playing;
+  }
+
+  async setPlaybackRate(rate: number, tracks: Array<{ id: string; startTime: number; volume: number; muted: boolean }>) {
+    const resume = this.playing;
+    if (resume) this.pause();
+    this.rate = Math.max(0.5, Math.min(2, rate));
+    if (resume) await this.play(tracks);
   }
 
   setVolume(id: string, volume: number, muted: boolean) {

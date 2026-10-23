@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 — 2026-10-23
+
+- Add A–B repeat, 0.5–2× playback and Space / Esc / [ / ] shortcuts.
+- Keep playback position consistent when changing speed.
+- Reset to 1× when recording to preserve track alignment.
+- Extend smoke tests to cover looping, half-speed and keyboard playback.
+- Playback rate currently changes pitch; pitch-preserving playback is not implemented.
+
 ## 0.1.1 — 2026-10-23
 
 - Build an Apple Silicon macOS application from the MIT community prototype.

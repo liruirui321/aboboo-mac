@@ -84,7 +84,7 @@ export default function App() {
         <span style={{ fontWeight: 600, fontSize: 16, marginRight: 8 }}>Aboboo 社区版</span>
         <button onClick={() => handleOpenFile().catch(reportError)} disabled={usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
         <button onClick={() => handleLoadProject().catch(reportError)} disabled={usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
-        <button onClick={() => handleSave().catch(reportError)} disabled={!project} style={toolbarBtn}>保存项目</button>
+        <button onClick={() => handleSave().catch(reportError)} disabled={!project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
         {project && (
           <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>{project.name}</span>
         )}
