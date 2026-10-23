@@ -19,3 +19,5 @@ dist/
 artifacts/
 
 src-tauri/gen/
+
+src-tauri/resources/asr/

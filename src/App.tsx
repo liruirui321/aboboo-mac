@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -7,11 +7,18 @@ import { projectService } from './services/projectService';
 import { useProjectStore } from './stores/projectStore';
 import { usePlayerStore } from './stores/playerStore';
 import { Timeline } from './components/Timeline/Timeline';
+import { Favorites } from './components/Dictation/Favorites';
+import { Dictation } from './components/Dictation/Dictation';
 import { Transport } from './components/Player/Transport';
 
 export default function App() {
   const { project, setProject, setBlobUrl, setBlobUrls, recordingBlobs, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
+
+  const [mode, setMode] = useState<'audio'|'dictation'|'favorites'>('audio');
+  const [asrBusy,setAsrBusy] = useState(false);
+  useEffect(()=>{if(!project)return;const key='aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2);if(project.favorites===undefined){try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(saved))useProjectStore.getState().updateProject({favorites:saved});}catch{}}},[project?.id]);
+  useEffect(()=>{if(!project?.favorites)return;try{localStorage.setItem('aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2),JSON.stringify(project.favorites));}catch{}},[project?.favorites]);
 
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
@@ -102,9 +109,11 @@ export default function App() {
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: '#16213e', borderBottom: '1px solid #333' }}>
         <span style={{ fontWeight: 600, fontSize: 16, marginRight: 8 }}>Aboboo 社区版</span>
-        <button onClick={() => handleOpenFile().catch(reportError)} disabled={!!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
-        <button onClick={() => handleLoadProject().catch(reportError)} disabled={!!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
-        <button onClick={() => handleSave().catch(reportError)} disabled={!!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
+        <button onClick={() => handleOpenFile().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
+        <button onClick={() => handleLoadProject().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
+        <button onClick={() => handleSave().catch(reportError)} disabled={asrBusy || !!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
+        {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode(mode==='dictation'?'audio':'dictation');}}>{mode==='dictation'?'音频／跟读':'听写练习'}</button>}
+        {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('favorites');}}>收藏词卡 ({project.favorites?.length||0})</button>}
         {project && (
           <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>{project.name}</span>
         )}
@@ -114,7 +123,7 @@ export default function App() {
       {error && <div role="alert" style={{padding:12, color:'#ffb4ab'}} onClick={() => setError('')}>{error}（点击关闭）</div>}
       {/* Timeline */}
       {project ? (
-        <Timeline />
+        mode==='dictation'?<Dictation onBusy={setAsrBusy}/>:mode==='favorites'?<Favorites/>:<Timeline />
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 16 }}>
           打开音频，开始播放与跟读录音 · 社区实验版
@@ -122,7 +131,7 @@ export default function App() {
       )}
 
       {/* Transport */}
-      <Transport />
+      {mode==='audio'&&<Transport />}
     </div>
   );
 }

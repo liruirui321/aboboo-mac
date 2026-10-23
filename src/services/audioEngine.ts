@@ -91,6 +91,32 @@ export class AudioEngine {
     if (resume) await this.play(tracks);
   }
 
+  async exportWav(id: string): Promise<Uint8Array> {
+    const original = this.buffers.get(id);
+    if (!original) throw new Error('请先打开音频。');
+    if (original.duration > 7200) throw new Error('单次识别暂限两小时音频。');
+    const offline = new OfflineAudioContext(1, Math.ceil(original.duration * 16000), 16000);
+    const source = offline.createBufferSource(); source.buffer = original; source.connect(offline.destination); source.start();
+    const data = (await offline.startRendering()).getChannelData(0);
+    const bytes = new Uint8Array(44 + data.length * 2); const view = new DataView(bytes.buffer);
+    const tag = (offset:number,text:string) => [...text].forEach((c,i)=>view.setUint8(offset+i,c.charCodeAt(0)));
+    tag(0,'RIFF');view.setUint32(4,bytes.length-8,true);tag(8,'WAVE');tag(12,'fmt ');view.setUint32(16,16,true);
+    view.setUint16(20,1,true);view.setUint16(22,1,true);view.setUint32(24,16000,true);view.setUint32(28,32000,true);view.setUint16(32,2,true);view.setUint16(34,16,true);tag(36,'data');view.setUint32(40,data.length*2,true);
+    for(let i=0;i<data.length;i++)view.setInt16(44+i*2,Math.round(Math.max(-1,Math.min(1,data[i]))*(data[i]<0?32768:32767)),true);
+    return bytes;
+  }
+
+  async playRange(id:string,start:number,end:number,rate=1) {
+    const buffer=this.buffers.get(id);if(!buffer)throw new Error('音频尚未加载。');
+    this.stop();const ctx=this.getCtx();await ctx.resume();
+    start=Math.max(0,start);end=Math.min(buffer.duration,end);if(end<=start)return;
+    this.rate=rate;this.pausedAt=start;this.startedAt=ctx.currentTime;this.playing=true;
+    const source=ctx.createBufferSource();source.buffer=buffer;source.playbackRate.value=rate;source.connect(ctx.destination);
+    this.sources.set(id,source);
+    source.onended=()=>{if(this.sources.get(id)===source && this.playing){this.pausedAt=end;this.playing=false;this.sources.delete(id);source.disconnect();}};
+    source.start(0,start,end-start);
+  }
+
   setVolume(id: string, volume: number, muted: boolean) {
     const gain = this.gainNodes.get(id);
     if (gain) gain.gain.value = muted ? 0 : volume;

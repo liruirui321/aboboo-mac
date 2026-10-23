@@ -7,6 +7,7 @@ interface ProjectState {
   recordingBlobs: Map<string, Blob>;
   blobUrls: Map<string, string>;
   setProject: (project: Project) => void;
+  updateProject: (updates: Partial<Project>) => void;
   addTrack: (track: Omit<Track, 'id'>) => Track;
   updateTrack: (id: string, updates: Partial<Track>) => void;
   removeTrack: (id: string) => void;
@@ -22,6 +23,7 @@ export const useProjectStore = create<ProjectState>((set) => ({
   blobUrls: new Map(),
 
   setProject: (project) => set({ project }),
+  updateProject: (updates) => set(state => ({project: state.project ? {...state.project, ...updates} : null})),
 
   addTrack: (trackData) => {
     const track: Track = { ...trackData, id: uuidv4() };

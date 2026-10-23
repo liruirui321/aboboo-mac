@@ -17,6 +17,11 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/asr
+          key: asr-${{ runner.os }}-${{ runner.arch }}-small-q5-v174-${{ hashFiles('scripts/setup-asr.sh') }}
+      - run: bash scripts/setup-asr.sh
       - run: npm ci
       - run: npx playwright install chromium
       - name: Browser smoke tests
@@ -26,9 +31,11 @@ jobs:
           trap 'kill "$VITE_PID"' EXIT
           for i in {1..30}; do curl -fsS http://127.0.0.1:1420 >/dev/null && break; sleep 1; done
           npm test
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --release
       - run: npm run tauri build -- --bundles app
       - name: Sign and archive
         run: |
+          codesign --force --sign - 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/asr/whisper-cli'
           codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist 'target/release/bundle/macos/Aboboo Community.app'
           codesign --verify --deep --strict 'target/release/bundle/macos/Aboboo Community.app'
           ditto -c -k --sequesterRsrc --keepParent 'target/release/bundle/macos/Aboboo Community.app' Aboboo-Community-macOS.zip

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.0 — 2026-10-23
+
+- Bundle offline Whisper transcription with silence splitting, progress and cancellation.
+- Add sentence dictation, looping, hints, word-level grading, correction and SRT import/export.
+- Add sentence/word favorites and audio flashcards with notes, review counts and mastery filtering.
+- Persist dictation and cards in local cache and self-contained projects.
+- Extend browser coverage for dictation, favorites and saved review state.
+
+
 ## 0.2.1 — 2026-10-23
 
 - Detect macOS cloud placeholders before attempting audio reads.

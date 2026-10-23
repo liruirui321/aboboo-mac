@@ -1,20 +1,25 @@
 const {chromium}=require('playwright');
 (async()=>{
 const browser=await chromium.launch({...(process.env.CHROME_PATH ? {executablePath:process.env.CHROME_PATH} : {}),headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
-const page=await browser.newPage(); const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE',e.message)});page.on('dialog',async d=>{errors.push(d.message());await d.dismiss()});
+const page=await browser.newPage(); page.setDefaultTimeout(15000); const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('PAGE',e.message)});page.on('dialog',async d=>{errors.push(d.message());await d.dismiss()});
 await page.addInitScript(()=>{
 const rate=8000,n=rate*8,ab=new ArrayBuffer(44+n*2),v=new DataView(ab); const str=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,n*2,true);for(let i=0;i<n;i++)v.setInt16(44+i*2,Math.sin(i*2*Math.PI*220/rate)*1000,true);
-window.__saved=null;window.__TAURI_INTERNALS__={invoke:async(cmd,args)=>{
+window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__saved=null;window.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+if(cmd==='plugin:event|listen')return 1;
+if(cmd==='plugin:event|unlisten'||cmd==='plugin:fs|mkdir')return;
+if(cmd==='plugin:path|resolve_directory')return '/tmp/aboboo-cache';
+if(cmd==='plugin:path|join')return args.paths.join('/');
+if(cmd==='transcribe_audio')return [{start:0,end:2,text:'The library opens at nine.'},{start:3,end:6,text:'Please bring your student card.'}];
 if(cmd==='inspect_audio_file'){if(window.__cloud)throw Error('此音频是云端占位文件');return ab.byteLength;}
 if(cmd==='plugin:dialog|open')return args.options.filters[0].extensions[0]==='abmac'?'/tmp/test.abmac':'/tmp/test.wav';
 if(cmd==='plugin:dialog|save')return '/tmp/test.abmac';
 if(cmd==='plugin:fs|read_file')return Array.from(new Uint8Array(ab));
-if(cmd==='plugin:fs|write_file'){window.__saved=new TextDecoder().decode(args);return;}
+if(cmd==='plugin:fs|write_file'){const value=new TextDecoder().decode(args);if(!value.startsWith('RIFF'))window.__saved=value;return;}
 if(cmd==='plugin:fs|read_text_file')return Array.from(new TextEncoder().encode(window.__saved));
 throw Error('Unexpected IPC '+cmd);
 }};
 });
-await page.goto('http://127.0.0.1:1420');
+await page.goto(process.env.TEST_URL || 'http://127.0.0.1:1420');
 await page.evaluate(()=>window.__cloud=true);
 await page.getByRole('button',{name:'打开音频',exact:true}).click();await page.getByRole('alert').waitFor();
 if(!(await page.getByRole('alert').innerText()).includes('云端占位'))throw Error('Missing cloud error');
@@ -45,6 +50,47 @@ await page.getByRole('button',{name:'● 跟读录音',exact:true}).click();awai
 let tracks=await page.evaluate(async()=> (await import('/src/stores/projectStore.ts')).useProjectStore.getState().project.tracks.length);if(tracks!==2)throw Error('Recording not saved: '+tracks);
 await page.getByRole('button',{name:'保存项目',exact:true}).click();await page.waitForTimeout(250);await page.getByRole('button',{name:'打开项目',exact:true}).click();await page.waitForTimeout(300);
 const restored=await page.evaluate(async()=> (await import('/src/stores/projectStore.ts')).useProjectStore.getState().project.tracks.length);if(restored!==2)throw Error('Recorded project not restored');
+
+await page.getByRole('button',{name:'听写练习',exact:true}).click();
+await page.getByRole('button',{name:'自动提取字幕',exact:true}).click();
+await page.getByLabel('听写答案',{exact:true}).waitFor().catch(async e=>{console.error(await page.locator('body').innerText());throw e;});
+if(await page.getByLabel('参考答案',{exact:true}).count())throw Error('Answer not hidden');
+await page.getByRole('button',{name:'播放本句',exact:true}).click();await page.waitForTimeout(2300);
+if(await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Sentence did not stop');
+await page.getByLabel('听写答案',{exact:true}).fill('The shop opens at nine');
+await page.getByRole('button',{name:'提交批改',exact:true}).click();
+if(!(await page.getByLabel('批改结果').innerText()).includes('shop → library'))throw Error('Wrong word feedback');
+await page.getByRole('button',{name:'收藏本句',exact:true}).click();
+await page.getByRole('button',{name:'收藏单词 library',exact:true}).click();
+await page.getByRole('button',{name:'收藏本句',exact:true}).click();
+await page.getByRole('button',{name:'首字母提示',exact:true}).click();await page.getByLabel('提示',{exact:true}).waitFor();
+await page.getByRole('button',{name:'下一句',exact:true}).click();
+await page.getByLabel('听写答案',{exact:true}).fill('PLEASE bring your student card!');
+await page.getByLabel('听写答案',{exact:true}).press('Control+Enter');
+if(!(await page.getByLabel('批改结果').innerText()).includes('全部正确'))throw Error('Case punctuation grading');
+await page.getByLabel('只看错句').check();
+if(await page.getByRole('button',{name:'第 2 句',exact:true}).count())throw Error('Wrong filter');
+await page.getByRole('button',{name:'第 1 句',exact:true}).click();
+await page.getByRole('button',{name:'收藏词卡 (2)',exact:true}).click();
+if((await page.getByLabel('词卡正面').innerText()).includes('library'))throw Error('Sentence card leaks answer');
+await page.getByRole('button',{name:'翻面查看',exact:true}).click();
+await page.getByLabel('词卡笔记').fill('图书馆开门时间');
+await page.getByRole('button',{name:'已掌握',exact:true}).click();
+if(!(await page.getByLabel('词卡正面').innerText()).includes('______'))throw Error('Word cloze missing');
+await page.getByRole('button',{name:'翻面查看',exact:true}).click();
+if(!(await page.getByLabel('词卡背面').innerText()).includes('library'))throw Error('Card back missing');
+await page.getByLabel('词卡笔记').fill('图书馆');
+await page.getByRole('button',{name:'再练一次',exact:true}).click();
+await page.getByLabel('只复习未掌握').check();
+await page.getByRole('button',{name:'翻面查看',exact:true}).click();
+if(await page.getByLabel('词卡笔记').inputValue()!=='图书馆')throw Error('Card filter/notes failed');
+await page.getByRole('button',{name:'保存项目',exact:true}).click();await page.waitForTimeout(200);
+await page.getByRole('button',{name:'打开项目',exact:true}).click();await page.waitForTimeout(300);
+const review=await page.evaluate(async()=> (await import('/src/stores/projectStore.ts')).useProjectStore.getState().project);
+if(review.favorites.length!==2||!review.favorites[0].mastered||review.favorites[1].note!=='图书馆'||review.favorites[1].reviews!==1||!review.dictation.sentences[1].submitted)throw Error('Saved review state missing');
+const grades=await page.evaluate(async()=>{const {grade}=await import('/src/services/dictation.ts');return [grade('one two three','one three'),grade('one two','one extra two')];});
+if(!grades[0].edits.some(e=>e.kind==='missing')||!grades[1].edits.some(e=>e.kind==='extra'))throw Error('Missing/extra grading');
+
 if (await page.getByRole('alert').count()) throw Error(await page.getByRole('alert').innerText());
-await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut'],errors},null,2)); if(errors.length)process.exit(1);
+await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});
