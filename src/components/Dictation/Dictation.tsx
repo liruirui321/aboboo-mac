@@ -9,6 +9,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { grade, sentences, srt, parseSrt } from '../../services/dictation';
 import { record } from '../../services/submissions';
 import type { Sentence } from '../../types/project';
+import { ResizeBoundary, resetPanelSizes } from '../Layout/ResizeBoundary';
 import { StudyWaveform } from './StudyWaveform';
 
 const stamp=(t:number)=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
@@ -40,6 +41,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
     const handle=(e:KeyboardEvent)=>{
       if(e.defaultPrevented||e.repeat||e.isComposing||busy||editing||!sentence||!original)return;
       const target=e.target as HTMLElement|null;
+      if(target?.closest('[role=separator]'))return;
       const typing=!!target?.closest('input,textarea,select,[contenteditable="true"]');
       if(e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&e.code==='Space'){e.preventDefault();next(1);inputRef.current?.focus();}
       else if(!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&((!e.altKey&&!typing&&e.code==='Space')||(e.altKey&&e.code==='KeyP'))){e.preventDefault();togglePlayback().catch(failure);}
@@ -104,13 +106,16 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
       {!items.length&&<button disabled={busy} onClick={()=>importSubs().catch(failure)}>导入 SRT</button>}
       {busy&&<button onClick={()=>invoke('cancel_transcription').catch(failure)}>取消识别</button>}
       {!!items.length&&<button onClick={()=>exportSubs().catch(failure)}>导出字幕</button>}
+      <button onClick={resetPanelSizes}>恢复布局</button>
       <span role="status" className="study-status">{status}</span>
       {!!items.length&&<label className="wrong-filter"><input type="checkbox" checked={wrongOnly} onChange={e=>setWrongOnly(e.target.checked)}/>只看错句</label>}
     </div>
     {error&&<div role="alert" className="study-error">{error}</div>}
     <div className="study-waves">
       <StudyWaveform id={original.id} start={0} end={project.duration} position={position} selection={sentence} onSeek={seekSentence}/>
+      <ResizeBoundary name="音频总览高度" variable="--overview-height" target=".overview" min={32} max={300} initial={46}/>
       {sentence&&<StudyWaveform id={original.id} start={sentence.start} end={sentence.end} position={position} onSeek={detailPlay} detail/>}
+      {sentence&&<ResizeBoundary name="本句波形高度" variable="--detail-height" target=".detail" min={40} max={350} initial={58}/>}
     </div>
     {!items.length?<div className="dictation-empty"><span className="empty-wave">▂ ▅ ▃ ▇ ▅ ▂</span><h2>从一段音频，开始听写</h2><p>点击上方“自动提取字幕”，在本机生成听写片段。</p><p>也可以导入已有 SRT。识别后，先听原音、输入内容，再校对。</p><small>机器字幕可能有误，支持手动校正文本和时间。</small></div>:<>
       <div className="sentence-browser">
@@ -120,11 +125,13 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
           </table>
           {!visible.length&&<div className="empty-rows">还没有错句。取消“只看错句”继续听写。</div>}
         </div>
+        <ResizeBoundary name="本句词语宽度" variable="--notebook-width" target=".word-notebook" axis="x" reverse min={120} max={500} initial={190}/>
         <aside className="word-notebook"><div className="panel-caption">本句词语 <small>☆ 收藏复习</small></div>
           {result&&!result.correct?result.edits.filter(e=>e.expected&&e.kind!=='correct').map((e,i)=><div className="notebook-word" key={i}><strong>{e.expected}</strong><button aria-label={`收藏单词 ${e.expected}`} title="收藏为词卡" onClick={()=>favorite('word',e.expected!)}>☆</button><small>{e.kind==='missing'?'漏写':`误写为 ${e.actual}`}</small></div>):<p className="notebook-empty">提交后在这里查看错词、漏词，点击 ☆ 加入词卡。</p>}
           <button aria-label="收藏本句" className="save-sentence" onClick={()=>favorite('sentence',sentence.text)}>☆ 收藏本句</button>
         </aside>
       </div>
+      <ResizeBoundary name="句子列表高度" variable="--browser-height" target=".sentence-browser" min={80} max={600} initial={160}/>
       {sentence&&<>
         <div className="sentence-controls">
           <strong>第 {index+1} / {items.length} 句</strong>
@@ -141,6 +148,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
             onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}if((e.metaKey||e.ctrlKey)&&e.code==='Space'){e.preventDefault();play().catch(failure);}if(e.key==='F1'){e.preventDefault();submit();}}}/>
           {hint&&<p aria-label="提示" className="initial-hint">{sentence.text.split(/\s+/).map(w=>w[0]+'＿'.repeat(Math.max(1,w.length-1))).join(' ')}</p>}
         </div>
+        <ResizeBoundary name="听写输入区高度" variable="--writing-height" target=".writing-area" min={105} max={700} initial={180}/>
         <div className="checking-toolbar">
           <button aria-label="提交批改" className="primary" onClick={submit}>提交批改<small className="shortcut-hint">⌘ Enter</small></button>
           <button onClick={()=>{if(!hint)update({assisted:true});setHint(!hint);}}>首字母提示</button>
@@ -148,12 +156,14 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
           <button onClick={()=>{update({answer:'',submitted:false,revealed:false});setHint(false);}}>重新听写</button>
           <button className="edit-reference" onClick={()=>{stop();setEditing(!editing);setReference(sentence.text);setStart(sentence.start.toFixed(2));setEnd(sentence.end.toFixed(2));}}>校正参考文本／时间</button>
         </div>
-        {(sentence.revealed||sentence.submitted||editing)&&<div className="checking-panel">
+        {(sentence.revealed||sentence.submitted||editing)&&<>
+        <ResizeBoundary name="批改区域高度" variable="--checking-height" target=".checking-panel" reverse min={70} max={450} initial={135}/>
+        <div className="checking-panel">
           {(sentence.revealed||sentence.submitted)&&<div className="reference-line"><span>参考：</span><p aria-label="参考答案">{sentence.text}</p></div>}
           {result&&<div aria-label="批改结果" className="grading-line"><strong>{result.correct?'全部正确':`词语准确率 ${result.score}%`}</strong><div>{result.edits.map((e,i)=><span key={i} className={'edit-token '+e.kind}>{e.kind==='correct'?e.actual:e.kind==='missing'?`漏：${e.expected}`:e.kind==='extra'?`多：${e.actual}`:`${e.actual} → ${e.expected}`}</span>)}</div><small>忽略大小写与标点 · 红：错词 · 黄：漏词 · 紫：多写</small></div>}
           {editing&&<div className="reference-editor"><textarea aria-label="校正文本" value={reference} onChange={e=>setReference(e.target.value)}/><label>起点（秒）<input aria-label="句子起点" type="number" step="0.01" value={start} onChange={e=>setStart(e.target.value)}/></label><label>终点（秒）<input aria-label="句子终点" type="number" step="0.01" value={end} onChange={e=>setEnd(e.target.value)}/></label><button onClick={()=>{const a=Number(start),b=Number(end);if(!reference.trim()||!Number.isFinite(a)||!Number.isFinite(b)||a<0||b<=a||b>project.duration){setError('文本不能为空；起止时间需位于音频范围内。');return;}update({text:reference.trim(),start:a,end:b,submitted:false});setEditing(false);setError('');}}>保存校正</button></div>}
           <div className="reference-source">{project.dictation?.source} · 可校正，不代表官方答案</div>
-        </div>}
+        </div></>}
       </>}
       <footer className="study-footer"><span>已提交 {done}/{items.length}　全对 {correct}　待复习 {done-correct}</span><span>本机自动缓存 · 保存项目可备份进度与收藏</span></footer>
     </>}

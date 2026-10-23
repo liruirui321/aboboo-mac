@@ -157,5 +157,37 @@ const analysis=await page.evaluate(async()=>{
  return analyze([{...base,expected:'the library opens',answer:'shop opens'},{...base,id:'2',attempt:2,submittedAt:'2026-01-02T00:00:00Z',expected:'the library opens',answer:'the library opens'}]);
 });
 if(analysis.missing!==1||analysis.wrong!==1||analysis.improved!==1||analysis.retries!==1)throw Error('Analysis counts or retry trend wrong');
-await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
+// Resize real panels with pointer input, then verify preferences survive a reload.
+await page.getByRole('button',{name:'听写练习',exact:true}).click();
+if(!await page.locator('.checking-panel').count())await page.getByRole('button',{name:'显示答案',exact:true}).click();
+const panelCases=[['音频总览高度','.overview','y',35],['本句波形高度','.detail','y',35],['句子列表高度','.sentence-browser','y',50],['本句词语宽度','.word-notebook','x',-60],['听写输入区高度','.writing-area','y',40],['批改区域高度','.checking-panel','y',-40]];
+for(const [name,selector,axis,delta] of panelCases){
+ const handle=page.getByRole('separator',{name,exact:true});await handle.scrollIntoViewIfNeeded();
+ const before=await page.locator(selector).boundingBox(),box=await handle.boundingBox();
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+ await page.mouse.move(box.x+box.width/2+(axis==='x'?delta:0),box.y+box.height/2+(axis==='y'?delta:0),{steps:6});await page.mouse.up();
+ const after=await page.locator(selector).boundingBox();
+ if((axis==='x'?after.width-before.width:after.height-before.height)<25)throw Error('Divider did not resize '+name);
+}
+const layout=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([k])=>k.startsWith('aboboo-panel-size:'))));
+const projectBeforeReload=await page.evaluate(async()=>(await import('/src/stores/projectStore.ts')).useProjectStore.getState().project);
+await page.reload();
+await page.evaluate(async project=>{window.__library={[project.id]:project};(await import('/src/stores/projectStore.ts')).useProjectStore.getState().setProject(project);},projectBeforeReload);
+await page.getByRole('button',{name:'听写练习',exact:true}).click();
+for(const [key,value] of Object.entries(layout)){
+ const actual=await page.locator('.dictation-workspace').evaluate((el,key)=>el.style.getPropertyValue(key.replace('aboboo-panel-size:','')),key);
+ if(actual!==value+'px')throw Error('Layout not restored '+key);
+}
+const divider=page.getByRole('separator',{name:'本句词语宽度',exact:true});await divider.focus();
+const oldWidth=(await page.locator('.word-notebook').boundingBox()).width;await divider.press('ArrowLeft');
+if((await page.locator('.word-notebook').boundingBox()).width<=oldWidth)throw Error('Keyboard resize failed');
+await divider.dblclick();
+if(await page.evaluate(()=>localStorage.getItem('aboboo-panel-size:--notebook-width'))!==null)throw Error('Double click reset failed');
+await page.setViewportSize({width:800,height:600});
+await page.getByRole('button',{name:'恢复布局',exact:true}).click();
+await page.getByLabel('听写答案',{exact:true}).scrollIntoViewIfNeeded();
+if((await page.getByLabel('听写答案',{exact:true}).boundingBox()).height<60)throw Error('Small window lost input');
+if(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('aboboo-panel-size:'))))throw Error('Reset layout failed');
+if((await page.evaluate(async()=>(await import('/src/stores/projectStore.ts')).useProjectStore.getState().project.dictation.sentences[0].answer))!==projectBeforeReload.dictation.sentences[0].answer)throw Error('Resizing changed practice data');
+await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','all six draggable boundaries, keyboard and double-click reset, reload persistence, small window layout','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});
