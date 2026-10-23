@@ -22,3 +22,7 @@ src-tauri/gen/
 
 src-tauri/resources/asr/
 src-tauri/resources/llm/
+
+# Python CLI caches
+__pycache__/
+*.pyc
