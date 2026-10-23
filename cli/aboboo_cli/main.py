@@ -147,7 +147,9 @@ def submit(c, args):
             raise ValueError('音频文件不存在')
     payload = dict(id=ident, status='queued', stage='queued', createdAt=now(), updatedAt=now(),
                    source=source, title=args.title, sourceNote=args.source_note,
-                   keepInstructions=args.keep_instructions)
+                   keepInstructions=args.keep_instructions,
+                   segmenterProvider=args.segmenter or c.get('segmenterProvider','deepseek'),
+                   deepseekModel=c.get('deepseekModel','deepseek-flash'))
     if args.subtitles:
         p = Path(args.subtitles).expanduser().resolve()
         data = subtitles(p)  # Validate syntax, snapshot so later edits cannot change a queued job.
@@ -208,15 +210,20 @@ def run(c, ident):
                     checked([sys.executable, REPO/'cli/aboboo_cli/transcribe.py', audio, j/'words.json', c['whisper'], c['model'], c['ffmpeg']], j, c)
                 update(j, stage='segment')
                 if not (j/'segments.json').exists():
-                    checked([c['segmenter'], j/'words.json', c['llm'], j/'segments.partial.json'], j, c)
-                    os.replace(j/'segments.partial.json', j/'segments.json')
+                    provider = task.get('segmenterProvider',c.get('segmenterProvider','deepseek'))
+                    if provider == 'qwen':
+                        checked([c['segmenter'], j/'words.json', c['llm'], j/'segments.partial.json'], j, c)
+                        os.replace(j/'segments.partial.json', j/'segments.json')
+                    else:
+                        from .segmentation import segment
+                        atomic(j/'segments.json',segment(read(j/'words.json'), j, provider, task.get('deepseekModel',c.get('deepseekModel','deepseek-flash'))))
                 data = read(j/'segments.json')
             update(j, stage='validate')
             ss, removed = validate(data, duration, task['keepInstructions'])
-            warnings = ['自动字幕需要人工核对'] if not task.get('subtitles') else []
+            warnings = (['自动字幕需要人工核对'] if not task.get('subtitles') else []) + data.get('warnings',[])
             if any(len(s['text'].split()) > 45 for s in ss):
                 warnings.append('存在超过 45 词的句子，请检查分句')
-            if '回退' in data.get('source', ''):
+            if '回退' in data.get('source', '') and not data.get('warnings'):
                 warnings.append('部分分句使用标点回退，请检查')
             atomic(j/'validation.json', dict(removedInstructions=removed, warnings=warnings))
             tid = str(uuid.uuid5(uuid.NAMESPACE_URL, pid + ':audio'))
@@ -271,7 +278,7 @@ def dispatch(args):
         cpath.parent.mkdir(parents=True, exist_ok=True)
         atomic(cpath, dict(storage=str(root),mount=mount,ffmpeg=shutil.which('ffmpeg') or 'ffmpeg',
             whisper=str(REPO/'src-tauri/resources/asr/whisper-cli'), model=str(REPO/'src-tauri/resources/asr/model.bin'),
-            segmenter=str(REPO/'target/release/prepare-material'), llm=str(REPO/'src-tauri/resources/llm')))
+            segmenterProvider='deepseek',deepseekModel='deepseek-flash',segmenter=str(REPO/'target/release/prepare-material'), llm=str(REPO/'src-tauri/resources/llm')))
         return dict(config=str(cpath), storage=str(root))
     if args.command == 'serve':
         # One request per line: {id, argv:["submit", ...]}. No arbitrary shell execution.
@@ -291,10 +298,13 @@ def dispatch(args):
         return None
     c = config(cpath)
     if args.command == 'doctor':
-        checks = {k:Path(c[k]).is_file() for k in ('ffmpeg','whisper','model','segmenter')}
-        checks['llm'] = all((Path(c['llm'])/f).is_file() for f in ('llama-completion','qwen.gguf'))
+        checks = {k:Path(c[k]).is_file() for k in ('ffmpeg','whisper','model')}
+        provider = c.get('segmenterProvider','deepseek')
+        if provider == 'qwen':
+            checks['segmenter'] = Path(c['segmenter']).is_file()
+            checks['llm'] = all((Path(c['llm'])/f).is_file() for f in ('llama-completion','qwen.gguf'))
         desktop = Path.home()/'Library/Application Support/local.aboboo.community/library'
-        return dict(ready=all(checks.values()),checks=checks,storage=c['storage'],desktopConnected=desktop.resolve()==(Path(c['storage'])/'library').resolve())
+        return dict(ready=all(checks.values()),checks=checks,segmenterProvider=provider,deepseekConfigured=bool(os.environ.get('DEEPSEEK_API_KEY')),storage=c['storage'],desktopConnected=desktop.resolve()==(Path(c['storage'])/'library').resolve())
     if args.command in ('ingest','submit'):
         task = submit(c,args)
         if args.command == 'ingest':
@@ -339,6 +349,7 @@ def parser():
         q = sub.add_parser(name)
         q.add_argument('source',help='本地文件或 HTTP(S) 音频直链')
         q.add_argument('--title')
+        q.add_argument('--segmenter',choices=['deepseek','punctuation','qwen'],help='默认 DeepSeek API；punctuation 完全离线；qwen 为旧的可选本地模型')
         q.add_argument('--subtitles',help='SRT 或 segments JSON；省略则离线 Whisper + Qwen')
         q.add_argument('--source-note',default='',help='来源、日期和音频类型等说明')
         q.add_argument('--keep-instructions',action='store_true')

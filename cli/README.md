@@ -1,6 +1,6 @@
 # Aboboo CLI 与智能体材料通道
 
-Python 3.9+，macOS。把音频下载、离线转写、Qwen 分句、字幕校验、考试指令过滤和桌面版入库封装为可恢复任务。它是本地处理流水线与智能体调用接口，不是自动搜题服务，也不会把练习音频认定为官方真题。
+Python 3.9+，macOS。把音频下载、离线转写、DeepSeek API 分句、字幕校验、考试指令过滤和桌面版入库封装为可恢复任务。它是本地处理流水线与智能体调用接口，不是自动搜题服务，也不会把练习音频认定为官方真题。
 
 ## 安装
 
@@ -8,8 +8,6 @@ Python 3.9+，macOS。把音频下载、离线转写、Qwen 分句、字幕校�
 
 ```sh
 bash scripts/setup-asr.sh
-bash scripts/setup-llm.sh
-cargo build --release --manifest-path src-tauri/Cargo.toml --bin prepare-material
 # 还需 ffmpeg；例如 brew install ffmpeg
 chmod +x cli/aboboo
 mkdir -p "$HOME/.local/bin"
@@ -26,7 +24,7 @@ SSD 未挂载时立即报错，不回退到内置盘。下载、临时 PCM、字
 ## 常用命令
 
 ```sh
-# 同步导入，结束后返回结果；无字幕时 Whisper + Qwen 自动处理
+# 同步导入，结束后返回结果；无字幕时 Whisper + DeepSeek API 自动处理
 aboboo ingest /Volumes/YourSSD/new.mp3 --title '新材料' --source-note '来源与考期说明'
 
 # 推荐智能体使用：后台导入，不占用对话等待时间
@@ -69,3 +67,22 @@ ABOBOO_TEST_TMP=/Volumes/YourSSD/test-work python3 tests/cli_test.py
 ```
 
 测试使用独立材料库，验证真实 ffmpeg 解码、SRT 导入、重复导入保护、无效字幕拒绝、SSD 缺失、失败恢复，以及 JSON Lines 后台任务。真实离线转写需模型文件另行验证。
+
+## DeepSeek 分句（默认）
+
+CLI 从启动环境读取 `DEEPSEEK_API_KEY`，不保存密钥。后台任务继承该环境；从其他终端、应用或自动任务启动时也须配置这个环境变量。`aboboo doctor` 显示 `deepseekConfigured`，不会显示密钥。默认模型为官方 JSON Output 示例使用的 `deepseek-flash`，可在配置中设置 `deepseekModel`。
+
+Whisper 仍在本机转写。DeepSeek 只接收编号后的字幕文字，不接收音频或用户听写答案。接口只返回句尾词编号，本地验证编号顺序、范围和末词，再从原始词时间戳构造句子，模型不能改写或删词。调用可能产生你账户的 API 费用。
+
+密钥缺失、网络失败或编号无效时，自动回退到本地标点和停顿分句，warnings 和字幕来源均会注明，不会自动调用 Qwen。同一任务已成功的 API 分批结果会缓存，失败重试可复用。`segments.json` 记录 apiUsage，`validation.json` 记录 warnings。
+
+```sh
+# 默认使用 DeepSeek；密钥通过安全环境配置，不放在命令参数中
+aboboo submit /Volumes/YourSSD/new.mp3 --segmenter deepseek
+# 完全离线，不调用 API
+aboboo submit /Volumes/YourSSD/new.mp3 --segmenter punctuation
+```
+
+旧的本地 Qwen 路径仅供显式 `--segmenter qwen` 使用：需先运行 `scripts/setup-llm.sh`，并构建 `prepare-material`。默认 CLI 不要求 Qwen 模型。此变更针对 CLI 通道；桌面版内部“自动提取字幕”的旧实现仍独立使用其随包模型。
+
+DeepSeek 接口参考：https://api-docs.deepseek.com/guides/json_mode/

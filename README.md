@@ -81,4 +81,4 @@ LLM 只返回句子边界编号，不改写原文；编号不合法或模型执�
 
 ### CLI 与智能体导入
 
-新增 [Aboboo CLI](cli/README.md)：`aboboo submit 音频路径或直链` 在后台完成下载、离线字幕、单句切分和材料入库；`status` 查询进度、`retry` 恢复失败任务。支持 SRT/JSON 字幕和 JSON Lines 智能体通道，媒体与临时文件保存在指定 SSD。
+新增 [Aboboo CLI](cli/README.md)：`aboboo submit 音频路径或直链` 在后台完成下载、本地 Whisper 转写、DeepSeek API 单句切分和材料入库；`status` 查询进度、`retry` 恢复失败任务。支持 SRT/JSON 字幕和 JSON Lines 智能体通道，媒体与临时文件保存在指定 SSD。
