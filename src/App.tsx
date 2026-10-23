@@ -116,7 +116,7 @@ export default function App() {
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode(mode==='dictation'?'audio':'dictation');}}>{mode==='dictation'?'音频／跟读':'听写练习'}</button>}
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('favorites');}}>收藏词卡 ({project.favorites?.length||0})</button>}
         {project && (
-          <span style={{ marginLeft: 8, color: '#9ab371', fontSize: 13 }}>{project.name}</span>
+          <span style={{ marginLeft: 8, color: '#81a1cc', fontSize: 13 }}>{project.name}</span>
         )}
       </div>
 
@@ -138,6 +138,6 @@ export default function App() {
 }
 
 const toolbarBtn: React.CSSProperties = {
-  padding: '5px 12px', background: '#233211', border: '1px solid #536b29',
-  borderRadius: 2, color: '#d4ecaa', cursor: 'pointer', fontSize: 13,
+  padding: '5px 12px', background: '#132030', border: '1px solid #2e4666',
+  borderRadius: 2, color: '#b1c7e5', cursor: 'pointer', fontSize: 13,
 };

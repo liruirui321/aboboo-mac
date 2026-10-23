@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — 2026-10-23
+
+- Switch the app, dictation waveforms and flashcards to a blue-black theme while preserving the classic workspace layout.
+
+
 ## 0.3.0 — 2026-10-23
 
 - Bundle offline Whisper transcription with silence splitting, progress and cancellation.

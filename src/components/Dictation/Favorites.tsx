@@ -3,7 +3,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { audioEngine } from '../../services/audioEngine';
 import { words } from '../../services/dictation';
 import type { Favorite } from '../../types/project';
-const btn:React.CSSProperties={padding:'9px 16px',background:'#2b4118',border:'1px solid #65863b',borderRadius:7,color:'white',cursor:'pointer'};
+const btn:React.CSSProperties={padding:'9px 16px',background:'#1a2a3f',border:'1px solid #446ea6',borderRadius:7,color:'white',cursor:'pointer'};
 export function Favorites(){
   const {project,updateProject}=useProjectStore();const [index,setIndex]=useState(0),[flipped,setFlipped]=useState(false),[onlyNew,setOnlyNew]=useState(false),[error,setError]=useState('');
   const all=project?.favorites||[], cards=all.filter(c=>!onlyNew||!c.mastered),card=cards[Math.min(index,Math.max(0,cards.length-1))];
@@ -18,18 +18,18 @@ export function Favorites(){
     <h2>收藏词卡 <small style={{fontWeight:400,fontSize:14}}>当前项目 {all.length} 张 · 已掌握 {all.filter(c=>c.mastered).length}</small></h2>
     <label><input type="checkbox" checked={onlyNew} onChange={e=>{setOnlyNew(e.target.checked);setIndex(0);}}/>只复习未掌握</label>
     {error&&<p role="alert">{error}</p>}
-    {!card?<p style={{padding:40,color:'#a8bd83'}}>暂无待复习词卡。在听写中点击“收藏本句”，或点击错词旁的 ☆。</p>:<div style={{maxWidth:760,margin:'24px auto'}}>
-      <div style={{color:'#9db978',marginBottom:12}}>第 {Math.min(index,cards.length-1)+1} / {cards.length} 张 · {card.kind==='word'?'单词卡':'句子卡'} · 已复习 {card.reviews} 次</div>
-      <div style={{background:'#1b300b',padding:28,borderRadius:14,minHeight:200,border:'1px solid #688c30'}}>
+    {!card?<p style={{padding:40,color:'#95b0d4'}}>暂无待复习词卡。在听写中点击“收藏本句”，或点击错词旁的 ☆。</p>:<div style={{maxWidth:760,margin:'24px auto'}}>
+      <div style={{color:'#8aa8cf',marginBottom:12}}>第 {Math.min(index,cards.length-1)+1} / {cards.length} 张 · {card.kind==='word'?'单词卡':'句子卡'} · 已复习 {card.reviews} 次</div>
+      <div style={{background:'#111c2a',padding:28,borderRadius:14,minHeight:200,border:'1px solid #426ca2'}}>
         <button style={btn} onClick={play}>播放词卡音频</button>
-        {!flipped?<><h3>听音回忆，再翻面查看</h3><p aria-label="词卡正面" style={{fontSize:22,lineHeight:1.8}}>{masked}</p></>:<div aria-label="词卡背面"><h2 style={{color:'#c3eb72'}}>{card.text}</h2>{card.kind==='word'&&<p style={{lineHeight:1.8}}>{card.context}</p>}<label>释义／笔记<textarea aria-label="词卡笔记" value={card.note} onChange={e=>update({note:e.target.value})} placeholder="记下中文释义、搭配或易错点…" style={{display:'block',width:'100%',padding:10,marginTop:8,minHeight:70}}/></label></div>}
+        {!flipped?<><h3>听音回忆，再翻面查看</h3><p aria-label="词卡正面" style={{fontSize:22,lineHeight:1.8}}>{masked}</p></>:<div aria-label="词卡背面"><h2 style={{color:'#aabfdc'}}>{card.text}</h2>{card.kind==='word'&&<p style={{lineHeight:1.8}}>{card.context}</p>}<label>释义／笔记<textarea aria-label="词卡笔记" value={card.note} onChange={e=>update({note:e.target.value})} placeholder="记下中文释义、搭配或易错点…" style={{display:'block',width:'100%',padding:10,marginTop:8,minHeight:70}}/></label></div>}
       </div>
       <div style={{display:'flex',gap:10,flexWrap:'wrap',marginTop:16}}>
-        <button style={btn} onClick={()=>move(-1)}>上一张</button><button style={{...btn,background:'#4c721e'}} onClick={()=>setFlipped(!flipped)}>{flipped?'盖住答案':'翻面查看'}</button><button style={btn} onClick={()=>move(1)}>下一张</button>
-        {flipped&&<><button style={btn} onClick={()=>review(false)}>再练一次</button><button style={{...btn,background:'#557e26'}} onClick={()=>review(true)}>已掌握</button></>}
+        <button style={btn} onClick={()=>move(-1)}>上一张</button><button style={{...btn,background:'#2d4463'}} onClick={()=>setFlipped(!flipped)}>{flipped?'盖住答案':'翻面查看'}</button><button style={btn} onClick={()=>move(1)}>下一张</button>
+        {flipped&&<><button style={btn} onClick={()=>review(false)}>再练一次</button><button style={{...btn,background:'#334e71'}} onClick={()=>review(true)}>已掌握</button></>}
         <button style={btn} onClick={()=>{audioEngine.pause();updateProject({favorites:all.filter(f=>f.id!==card.id)});setFlipped(false);}}>取消收藏</button>
       </div>
-      <p style={{fontSize:13,color:'#8ca867'}}>词卡保留原音频片段。笔记、收藏和掌握状态随项目保存；本机也会自动缓存。</p>
+      <p style={{fontSize:13,color:'#7296c6'}}>词卡保留原音频片段。笔记、收藏和掌握状态随项目保存；本机也会自动缓存。</p>
     </div>}
   </section>;
 }

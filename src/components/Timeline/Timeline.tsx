@@ -16,15 +16,15 @@ function TrackRow({ track, blobUrl, currentTime, onSeek }: TrackRowProps) {
   const { updateTrack, removeTrack } = useProjectStore();
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #3d5523' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', borderBottom: '1px solid #253953' }}>
       <div style={{ width: 140, flexShrink: 0 }}>
-        <div style={{ fontSize: 12, color: '#c9dda5', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 12, color: '#a2bde0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {track.name}
         </div>
         <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
           <button
             onClick={() => { updateTrack(track.id, { muted: !track.muted }); audioEngine.setVolume(track.id, track.volume, !track.muted); }}
-            style={{ fontSize: 10, padding: '2px 6px', background: track.muted ? '#555' : '#97c637', border: 'none', borderRadius: 3, color: '#fff', cursor: 'pointer' }}
+            style={{ fontSize: 10, padding: '2px 6px', background: track.muted ? '#555' : '#658dc0', border: 'none', borderRadius: 3, color: '#fff', cursor: 'pointer' }}
           >
             {track.muted ? 'M' : 'M'}
           </button>
@@ -55,7 +55,7 @@ function TrackRow({ track, blobUrl, currentTime, onSeek }: TrackRowProps) {
           duration={track.duration}
           onSeek={t => onSeek(t + track.startTime)}
           onReady={(d) => updateTrack(track.id, { duration: d })}
-          color={track.type === 'original' ? '#97c637' : '#2ecc71'}
+          color={track.type === 'original' ? '#658dc0' : '#638bbf'}
         />
       </div>
     </div>
