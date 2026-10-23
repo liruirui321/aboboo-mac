@@ -71,6 +71,11 @@ if(paused.playing||paused.time<0.2)throw Error('Pause shortcut failed');
 await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');
 if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Next shortcut failed');
 await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
+await page.getByLabel('听写答案',{exact:true}).press('Meta');
+if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Command single-key next failed');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
+await page.getByLabel('听写答案',{exact:true}).press('Meta+a');
+if(!(await page.locator('.sentence-controls strong').innerText()).includes('1 / 2'))throw Error('Command combination changed sentence');
 await page.getByLabel('听写答案',{exact:true}).fill('hello');
 await page.getByLabel('听写答案',{exact:true}).press('End');
 await page.getByLabel('听写答案',{exact:true}).press('Space');
@@ -82,7 +87,8 @@ if(!await page.getByLabel('听写答案',{exact:true}).evaluate(el=>el===documen
 await page.getByLabel('听写答案',{exact:true}).press('Alt+p');
 
 await page.getByLabel('听写答案',{exact:true}).fill('The shop opens at nine');
-await page.getByRole('button',{name:'提交批改',exact:true}).click();
+await page.getByLabel('听写答案',{exact:true}).press('Meta+Enter');
+if(!(await page.locator('.sentence-controls strong').innerText()).includes('1 / 2'))throw Error('Command Enter advanced sentence');
 if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH});
 if(!(await page.getByLabel('批改结果').innerText()).includes('shop → library'))throw Error('Wrong word feedback');
 await page.getByRole('button',{name:'收藏本句',exact:true}).click();
