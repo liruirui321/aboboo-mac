@@ -59,6 +59,7 @@ await page.getByRole('button',{name:'播放本句',exact:true}).click();await pa
 if(await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Sentence did not stop');
 await page.getByLabel('听写答案',{exact:true}).fill('The shop opens at nine');
 await page.getByRole('button',{name:'提交批改',exact:true}).click();
+if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH});
 if(!(await page.getByLabel('批改结果').innerText()).includes('shop → library'))throw Error('Wrong word feedback');
 await page.getByRole('button',{name:'收藏本句',exact:true}).click();
 await page.getByRole('button',{name:'收藏单词 library',exact:true}).click();
@@ -91,6 +92,14 @@ if(review.favorites.length!==2||!review.favorites[0].mastered||review.favorites[
 const grades=await page.evaluate(async()=>{const {grade}=await import('/src/services/dictation.ts');return [grade('one two three','one three'),grade('one two','one extra two')];});
 if(!grades[0].edits.some(e=>e.kind==='missing')||!grades[1].edits.some(e=>e.kind==='extra'))throw Error('Missing/extra grading');
 
+await page.getByRole('button',{name:'听写练习',exact:true}).click();
+await page.getByLabel('听写速度').selectOption('0.5');
+await page.getByRole('button',{name:'播放本句',exact:true}).click();
+await page.getByRole('button',{name:'音频／跟读',exact:true}).click();
+await page.getByRole('button',{name:'▶',exact:true}).click();await page.waitForTimeout(700);
+const normalTime=await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.getCurrentTime());
+if(normalTime<0.5||normalTime>1.1)throw Error('Playback rate leaked between modes '+normalTime);
+await page.getByRole('button',{name:'⏸',exact:true}).click();
 if (await page.getByRole('alert').count()) throw Error(await page.getByRole('alert').innerText());
 await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -91,6 +91,23 @@ export class AudioEngine {
     if (resume) await this.play(tracks);
   }
 
+  waveform(id: string, start: number, end: number, columns = 1000): number[] {
+    const buffer = this.buffers.get(id);
+    if (!buffer) return [];
+    const data = buffer.getChannelData(0);
+    const a = Math.max(0, Math.floor(start * buffer.sampleRate));
+    const b = Math.min(data.length, Math.ceil(end * buffer.sampleRate));
+    if (b <= a) return [];
+    const peaks = Array.from({length: columns}, (_, i) => {
+      const left = a + Math.floor((b-a)*i/columns), right = a + Math.floor((b-a)*(i+1)/columns);
+      let peak = 0;
+      for (let n=left;n<right;n++) peak = Math.max(peak, Math.abs(data[n]));
+      return peak;
+    });
+    const max = Math.max(...peaks, 0.01);
+    return peaks.map(p => p / max);
+  }
+
   async exportWav(id: string): Promise<Uint8Array> {
     const original = this.buffers.get(id);
     if (!original) throw new Error('请先打开音频。');

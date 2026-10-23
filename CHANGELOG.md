@@ -4,6 +4,8 @@
 
 - Bundle offline Whisper transcription with silence splitting, progress and cancellation.
 - Add sentence dictation, looping, hints, word-level grading, correction and SRT import/export.
+- Rework dictation into a classic green dual-waveform workspace with sentence table and word sidebar.
+- Restore the displayed playback rate when returning from dictation to the audio player.
 - Add sentence/word favorites and audio flashcards with notes, review counts and mastery filtering.
 - Persist dictation and cards in local cache and self-contained projects.
 - Extend browser coverage for dictation, favorites and saved review state.

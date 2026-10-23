@@ -53,6 +53,7 @@ export function Transport() {
       setIsPlaying(false);
     } else {
       const tracks = project.tracks.map(t => ({ id: t.id, startTime: t.startTime, volume: t.volume, muted: t.muted }));
+      await audioEngine.setPlaybackRate(rate, tracks);
       await audioEngine.play(tracks);
       setIsPlaying(true);
     }
@@ -92,9 +93,9 @@ export function Transport() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div style={{ padding: '12px 16px', background: '#1a1a2e', borderTop: '1px solid #333', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div style={{ padding: '12px 16px', background: '#1e300e', borderTop: '1px solid #3d5523', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
       <button onClick={handleStop} disabled={!project} style={btnStyle('#555')}>■</button>
-      <button onClick={handlePlayPause} disabled={!project || isRecording} style={btnStyle(isPlaying ? '#e67e22' : '#4a9eff')}>
+      <button onClick={handlePlayPause} disabled={!project || isRecording} style={btnStyle(isPlaying ? '#e67e22' : '#97c637')}>
         {isPlaying ? '⏸' : '▶'}
       </button>
       <button onClick={handleRecord} disabled={!project} style={btnStyle(isRecording ? '#c0392b' : '#e74c3c')}>
@@ -106,10 +107,10 @@ export function Transport() {
         onChange={e => { const next = Number(e.target.value); setRate(next); if (project) void audioEngine.setPlaybackRate(next, project.tracks); }}>
         {[0.5,0.75,1,1.25,1.5,2].map(v => <option key={v} value={v}>{v}×</option>)}
       </select></label>
-      <button disabled={!project || isRecording} style={btnStyle('#34495e')} onClick={() => {setLoopA(currentTime); setLoopB(null); setLoopEnabled(false);}}>A {loopA === null ? '—' : formatTime(loopA)}</button>
-      <button disabled={!project || isRecording || loopA === null || currentTime <= loopA + 0.1} style={btnStyle('#34495e')} onClick={() => {setLoopB(currentTime); setLoopEnabled(true);}}>B {loopB === null ? '—' : formatTime(loopB)}</button>
-      <button disabled={isRecording || loopB === null} aria-pressed={loopEnabled} style={btnStyle(loopEnabled ? '#16836b' : '#34495e')} onClick={() => setLoopEnabled(!loopEnabled)}>A–B 循环</button>
-      <div style={{ flex: 1, minWidth:80, height: 4, background: '#333', borderRadius: 2, cursor: 'pointer' }}
+      <button disabled={!project || isRecording} style={btnStyle('#304a17')} onClick={() => {setLoopA(currentTime); setLoopB(null); setLoopEnabled(false);}}>A {loopA === null ? '—' : formatTime(loopA)}</button>
+      <button disabled={!project || isRecording || loopA === null || currentTime <= loopA + 0.1} style={btnStyle('#304a17')} onClick={() => {setLoopB(currentTime); setLoopEnabled(true);}}>B {loopB === null ? '—' : formatTime(loopB)}</button>
+      <button disabled={isRecording || loopB === null} aria-pressed={loopEnabled} style={btnStyle(loopEnabled ? '#5d881a' : '#304a17')} onClick={() => setLoopEnabled(!loopEnabled)}>A–B 循环</button>
+      <div style={{ flex: 1, minWidth:80, height: 4, background: '#3d5523', borderRadius: 2, cursor: 'pointer' }}
         onClick={e => {
           if (!project || isRecording) return;
           const rect = e.currentTarget.getBoundingClientRect();
@@ -120,9 +121,9 @@ export function Transport() {
           setCurrentTime(t);
         }}
       >
-        <div style={{ width: `${progress}%`, height: '100%', background: '#4a9eff', borderRadius: 2 }} />
+        <div style={{ width: `${progress}%`, height: '100%', background: '#97c637', borderRadius: 2 }} />
       </div>
-      <span style={{ color: '#ccc', fontSize: 13, fontFamily: 'monospace', minWidth: 80 }}>
+      <span style={{ color: '#c9dda5', fontSize: 13, fontFamily: 'monospace', minWidth: 80 }}>
         {formatTime(currentTime)} / {formatTime(duration)}
       </span>
     </div>

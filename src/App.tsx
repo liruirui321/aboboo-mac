@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './theme.css';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { readFile } from '@tauri-apps/plugin-fs';
@@ -105,17 +106,17 @@ export default function App() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0f0f1a', color: '#fff', fontFamily: 'system-ui, sans-serif' }}>
+    <div className="app-shell">
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: '#16213e', borderBottom: '1px solid #333' }}>
-        <span style={{ fontWeight: 600, fontSize: 16, marginRight: 8 }}>Aboboo 社区版</span>
+      <div className="app-toolbar">
+        <span className="app-brand">Aboboo <small>社区版</small></span>
         <button onClick={() => handleOpenFile().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
         <button onClick={() => handleLoadProject().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
         <button onClick={() => handleSave().catch(reportError)} disabled={asrBusy || !!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode(mode==='dictation'?'audio':'dictation');}}>{mode==='dictation'?'音频／跟读':'听写练习'}</button>}
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('favorites');}}>收藏词卡 ({project.favorites?.length||0})</button>}
         {project && (
-          <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>{project.name}</span>
+          <span style={{ marginLeft: 8, color: '#9ab371', fontSize: 13 }}>{project.name}</span>
         )}
       </div>
 
@@ -137,6 +138,6 @@ export default function App() {
 }
 
 const toolbarBtn: React.CSSProperties = {
-  padding: '5px 12px', background: '#2c3e50', border: '1px solid #444',
-  borderRadius: 4, color: '#ccc', cursor: 'pointer', fontSize: 13,
+  padding: '5px 12px', background: '#233211', border: '1px solid #536b29',
+  borderRadius: 2, color: '#d4ecaa', cursor: 'pointer', fontSize: 13,
 };
