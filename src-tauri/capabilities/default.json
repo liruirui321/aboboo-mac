@@ -1,0 +1,31 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for Aboboo",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:path:default",
+    "core:event:default",
+    "core:window:default",
+    "core:app:default",
+    "core:resources:default",
+    "core:menu:default",
+    "core:tray:default",
+    "dialog:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-file",
+    "fs:allow-app-read-recursive",
+    "fs:allow-app-write-recursive",
+    "fs:allow-document-read-recursive",
+    "fs:allow-document-write-recursive",
+    "fs:allow-download-read-recursive",
+    "fs:allow-home-read-recursive",
+    "fs:allow-read-file"
+  ]
+}
