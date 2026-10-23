@@ -22,6 +22,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   const submitting=useRef(false);
   const commandGesture=useRef<{used:boolean}|null>(null);
   const tableRef=useRef<HTMLDivElement>(null);
+  const autoPlaySentence=useRef<string|null>(null);
   const [position,setPosition]=useState(0);const starting=useRef(false),inputRef=useRef<HTMLTextAreaElement>(null);
   const items=project?.dictation?.sentences||[], index=project?.dictation?.index||0, sentence=items[index];
   const original=project?.tracks.find(t=>t.type==='original');
@@ -31,7 +32,19 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   useEffect(()=>{if(!project)return; if(!project.dictation){try{const stored=JSON.parse(localStorage.getItem(key)||'null');if(stored&&Array.isArray(stored.sentences)&&stored.sentences.length)updateProject({dictation:stored});}catch{/* ignore corrupt local cache */}}return ()=>{audioEngine.pause();};},[project?.id]);
   useEffect(()=>{if(project?.dictation){try{localStorage.setItem(key,JSON.stringify(project.dictation));}catch{setError('本机进度缓存空间不足，请使用“保存项目”保存进度。');}}},[project?.dictation]);
   useEffect(()=>{onBusy(busy);return()=>onBusy(false);},[busy,onBusy]);
-  useEffect(()=>{setPlaying(false);setHint(false);setEditing(false);setPosition(sentence?.start||0);},[sentence?.id]);
+  useEffect(()=>{
+    starting.current=false;setPlaying(false);setHint(false);setEditing(false);setPosition(sentence?.start||0);
+    let cancelled=false;
+    const autoplay=autoPlaySentence.current===sentence?.id;autoPlaySentence.current=null;
+    if(autoplay&&sentence&&original){
+      setError('');starting.current=true;
+      audioEngine.playRange(original.id,sentence.start,sentence.end,rate)
+        .then(started=>{if(!cancelled&&started){setPlaying(true);inputRef.current?.focus();}})
+        .catch(e=>{if(!cancelled)failure(e);})
+        .finally(()=>{if(!cancelled)starting.current=false;});
+    }
+    return()=>{cancelled=true;};
+  },[sentence?.id]);
   useEffect(()=>{if(!playing||!sentence||!original)return;const timer=setInterval(()=>{setPosition(audioEngine.getCurrentTime());if(!audioEngine.isPlaying()&&!starting.current){if(repeat){starting.current=true;audioEngine.playRange(original.id,sentence.start,sentence.end,rate).catch(failure).finally(()=>{starting.current=false;});}else setPlaying(false);}},80);return()=>clearInterval(timer);},[playing,repeat,sentence?.id,rate]);
   useEffect(()=>{
     const box=tableRef.current;if(!box)return;
@@ -76,9 +89,9 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   });
   if(!project||!original)return null;
   const update=(changes:Partial<Sentence>)=>{if(!sentence)return;updateProject({dictation:{...project.dictation!,sentences:items.map((s,i)=>i===index?{...s,...changes}:s)}});};
-  const choose=(i:number)=>{stop();updateProject({dictation:{...project.dictation!,index:i}});};
+  const choose=(i:number,autoplay=false)=>{stop();autoPlaySentence.current=autoplay?items[i]?.id??null:null;updateProject({dictation:{...project.dictation!,index:i}});};
   const visible=items.map((s,i)=>({s,i})).filter(({s})=>!wrongOnly||(s.submitted&&!grade(s.text,s.answer).correct));
-  const next=(direction:number)=>{const at=visible.findIndex(v=>v.i===index);const item=visible[at+direction];if(item)choose(item.i);};
+  const next=(direction:number)=>{const at=visible.findIndex(v=>v.i===index);const item=visible[at+direction];if(item)choose(item.i,direction>0);};
   const play=async()=>{if(!sentence)return;stop();setError('');await audioEngine.playRange(original.id,sentence.start,sentence.end,rate);setPosition(sentence.start);setPlaying(true);inputRef.current?.focus();};
   const togglePlayback=async()=>{
     if(!sentence)return;if(audioEngine.isPlaying()){stop();return;}

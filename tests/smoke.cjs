@@ -67,12 +67,20 @@ if(await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).
 await page.getByLabel('听写答案',{exact:true}).press('Alt+p');await page.waitForTimeout(350);
 await page.getByLabel('听写答案',{exact:true}).press('Alt+p');
 const paused=await page.evaluate(async()=>{const e=(await import('/src/services/audioEngine.ts')).audioEngine;return {time:e.getCurrentTime(),playing:e.isPlaying()};});
-if(paused.playing||paused.time<0.2)throw Error('Pause shortcut failed');
+if(paused.playing||paused.time<0.2)throw Error('Pause shortcut failed '+JSON.stringify(paused));
 await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');
 if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Next shortcut failed');
+await page.waitForTimeout(200);
+const nextAudio=await page.evaluate(async()=>{const e=(await import('/src/services/audioEngine.ts')).audioEngine;return {playing:e.isPlaying(),time:e.getCurrentTime()};});
+if(!nextAudio.playing||nextAudio.time<3||nextAudio.time>3.8)throw Error('Next did not automatically play the new sentence');
+await page.waitForTimeout(3100);
+if(await page.evaluate(async()=>(await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Next autoplay did not stop after one pass');
+
 await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
 await page.getByLabel('听写答案',{exact:true}).press('Meta');
 if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Command single-key next failed');
+await page.waitForTimeout(100);
+if(!await page.evaluate(async()=>(await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Command next did not autoplay');
 await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
 await page.evaluate(()=>window.dispatchEvent(new CustomEvent('aboboo-command-modifier',{detail:{command:true,other:false}})));
 await page.getByLabel('听写答案',{exact:true}).press('Meta');
@@ -101,6 +109,8 @@ await page.getByRole('button',{name:'收藏单词 library',exact:true}).click();
 await page.getByRole('button',{name:'收藏本句',exact:true}).click();
 await page.getByRole('button',{name:'首字母提示',exact:true}).click();await page.getByLabel('提示',{exact:true}).waitFor();
 await page.getByRole('button',{name:'下一句',exact:true}).click();
+await page.waitForTimeout(100);
+if(!await page.evaluate(async()=>(await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Next button did not autoplay');
 await page.getByLabel('听写答案',{exact:true}).fill('PLEASE bring your student card!');
 await page.getByLabel('听写答案',{exact:true}).press('Control+Enter');
 if(!(await page.getByLabel('批改结果').innerText()).includes('全部正确'))throw Error('Case punctuation grading');
@@ -168,6 +178,18 @@ const analysis=await page.evaluate(async()=>{
  return analyze([{...base,expected:'the library opens',answer:'shop opens'},{...base,id:'2',attempt:2,submittedAt:'2026-01-02T00:00:00Z',expected:'the library opens',answer:'the library opens'}]);
 });
 if(analysis.missing!==1||analysis.wrong!==1||analysis.improved!==1||analysis.retries!==1)throw Error('Analysis counts or retry trend wrong');
+// Delayed audio-context resume must not revive a sentence after another selection/pause.
+const race=await page.evaluate(async()=>{
+ const {AudioEngine}=await import('/src/services/audioEngine.ts');const e=new AudioEngine();
+ const ctx=e.getCtx();e.buffers.set('race',ctx.createBuffer(1,ctx.sampleRate*8,ctx.sampleRate));
+ const pending=[];ctx.resume=()=>new Promise(resolve=>pending.push(resolve));
+ const first=e.playRange('race',0,1),second=e.playRange('race',3,4);
+ pending.splice(0).forEach(resolve=>resolve());const results=await Promise.all([first,second]);
+ const latest=e.getCurrentTime();const third=e.playRange('race',5,6);e.pause();pending.splice(0).forEach(resolve=>resolve());
+ const cancelled=await third;const playing=e.isPlaying();e.dispose();return {results,latest,cancelled,playing};
+});
+if(race.results[0]!==false||race.results[1]!==true||race.latest<3||race.latest>=4||race.cancelled!==false||race.playing)throw Error('Stale playback was not cancelled');
+
 // Resize real panels with pointer input, then verify preferences survive a reload.
 await page.getByRole('button',{name:'听写练习',exact:true}).click();
 if(!await page.locator('.checking-panel').count())await page.getByRole('button',{name:'显示答案',exact:true}).click();
@@ -200,5 +222,5 @@ await page.getByLabel('听写答案',{exact:true}).scrollIntoViewIfNeeded();
 if((await page.getByLabel('听写答案',{exact:true}).boundingBox()).height<60)throw Error('Small window lost input');
 if(await page.evaluate(()=>Object.keys(localStorage).some(k=>k.startsWith('aboboo-panel-size:'))))throw Error('Reset layout failed');
 if((await page.evaluate(async()=>(await import('/src/stores/projectStore.ts')).useProjectStore.getState().project.dictation.sentences[0].answer))!==projectBeforeReload.dictation.sentences[0].answer)throw Error('Resizing changed practice data');
-await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','all six draggable boundaries, keyboard and double-click reset, reload persistence, small window layout','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
+await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary and automatic single playback on next','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','all six draggable boundaries, keyboard and double-click reset, reload persistence, small window layout','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

@@ -7,6 +7,7 @@ export class AudioEngine {
   private pausedAt = 0;
   private playing = false;
   private rate = 1;
+  private rangeRequest = 0;
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
@@ -52,6 +53,7 @@ export class AudioEngine {
   }
 
   pause() {
+    ++this.rangeRequest;
     if (!this.playing) return;
     this.pausedAt = this.getCurrentTime();
     this.playing = false;
@@ -125,13 +127,15 @@ export class AudioEngine {
 
   async playRange(id:string,start:number,end:number,rate=1) {
     const buffer=this.buffers.get(id);if(!buffer)throw new Error('音频尚未加载。');
-    this.stop();const ctx=this.getCtx();await ctx.resume();
-    start=Math.max(0,start);end=Math.min(buffer.duration,end);if(end<=start)return;
+    this.stop();const request=++this.rangeRequest;const ctx=this.getCtx();await ctx.resume();
+    if(request!==this.rangeRequest)return false;
+    start=Math.max(0,start);end=Math.min(buffer.duration,end);if(end<=start)return false;
     this.rate=rate;this.pausedAt=start;this.startedAt=ctx.currentTime;this.playing=true;
     const source=ctx.createBufferSource();source.buffer=buffer;source.playbackRate.value=rate;source.connect(ctx.destination);
     this.sources.set(id,source);
     source.onended=()=>{if(this.sources.get(id)===source && this.playing){this.pausedAt=end;this.playing=false;this.sources.delete(id);source.disconnect();}};
     source.start(0,start,end-start);
+    return true;
   }
 
   setVolume(id: string, volume: number, muted: boolean) {
