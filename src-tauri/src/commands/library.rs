@@ -17,7 +17,7 @@ pub fn library_list(app:tauri::AppHandle)->Result<Vec<Value>,String>{
     let dir=directory(&app)?;let mut out=Vec::new();
     for entry in fs::read_dir(&dir).map_err(|e|e.to_string())? {
         let path=entry.map_err(|e|e.to_string())?.path();
-        if !path.to_string_lossy().ends_with(".meta.json"){continue;}
+        if path.file_name().and_then(|n|n.to_str()).is_some_and(|n|n.starts_with("._")) || !path.to_string_lossy().ends_with(".meta.json"){continue;}
         let mut meta=read(&path)?;let id=meta["id"].as_str().ok_or("材料索引无效")?;valid(id)?;
         if !dir.join(format!("{id}.abmac")).is_file(){continue;}
         let progress=dir.join(format!("{id}.progress.json"));

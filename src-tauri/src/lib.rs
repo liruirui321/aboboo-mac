@@ -12,6 +12,8 @@ pub fn run() {
             commands::project::inspect_audio_file,
             commands::transcribe::transcribe_audio,
             commands::transcribe::cancel_transcription,
+            commands::history::submission_record,
+            commands::history::submission_list,
             commands::library::library_list,
             commands::library::library_open,
             commands::library::library_add,

@@ -7,6 +7,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { audioEngine } from '../../services/audioEngine';
 import { useProjectStore } from '../../stores/projectStore';
 import { grade, sentences, srt, parseSrt } from '../../services/dictation';
+import { record } from '../../services/submissions';
 import type { Sentence } from '../../types/project';
 import { StudyWaveform } from './StudyWaveform';
 
@@ -17,6 +18,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   const [language,setLanguage]=useState('en'),[playing,setPlaying]=useState(false),[repeat,setRepeat]=useState(false),[rate,setRate]=useState(1);
   const [wrongOnly,setWrongOnly]=useState(false),[hint,setHint]=useState(false),[editing,setEditing]=useState(false);
   const [reference,setReference]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
+  const submitting=useRef(false);
   const tableRef=useRef<HTMLDivElement>(null);
   const [position,setPosition]=useState(0);const starting=useRef(false),inputRef=useRef<HTMLTextAreaElement>(null);
   const items=project?.dictation?.sentences||[], index=project?.dictation?.index||0, sentence=items[index];
@@ -63,7 +65,18 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
     if(favorites.some(f=>f.kind===kind&&f.text.toLowerCase()===text.toLowerCase()&&f.start===sentence.start)){setStatus('已经在收藏中');return;}
     updateProject({favorites:[...favorites,{id:crypto.randomUUID(),kind,text,context:sentence.text,start:sentence.start,end:sentence.end,note:'',mastered:false,reviews:0}]});setStatus('已加入收藏，可在“收藏词卡”复习');
   };
-  const submit=()=>{if(!sentence)return;update({submitted:true,attempts:sentence.attempts+1});};
+  const submit=async()=>{
+    if(!sentence||submitting.current)return;submitting.current=true;setError('');
+    const captured=sentence, projectId=project.id;
+    try{
+      await record(project,captured,!!captured.assisted||captured.revealed||hint);
+      const current=useProjectStore.getState().project;
+      if(current?.id===projectId&&current.dictation){
+        updateProject({dictation:{...current.dictation,sentences:current.dictation.sentences.map(s=>s.id===captured.id?{...s,submitted:s.answer===captured.answer&&s.text===captured.text,attempts:Math.max(s.attempts,captured.attempts+1)}:s)}});
+      }
+      setStatus('本次提交已保存到提交轨迹');
+    }catch(e){setError('提交未保存，请重试：'+String(e));}finally{submitting.current=false;}
+  };
   const transcribe=async()=>{
     setBusy(true);setError('');stop();setStatus('正在准备音频…');let unlisten:(()=>void)|undefined;
     try{
@@ -130,8 +143,8 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
         </div>
         <div className="checking-toolbar">
           <button aria-label="提交批改" className="primary" onClick={submit}>提交批改<small className="shortcut-hint">⌘ Enter</small></button>
-          <button onClick={()=>setHint(!hint)}>首字母提示</button>
-          <button onClick={()=>update({revealed:!sentence.revealed})}>{sentence.revealed?'隐藏答案':'显示答案'}</button>
+          <button onClick={()=>{if(!hint)update({assisted:true});setHint(!hint);}}>首字母提示</button>
+          <button onClick={()=>update({revealed:!sentence.revealed,assisted:sentence.assisted||!sentence.revealed})}>{sentence.revealed?'隐藏答案':'显示答案'}</button>
           <button onClick={()=>{update({answer:'',submitted:false,revealed:false});setHint(false);}}>重新听写</button>
           <button className="edit-reference" onClick={()=>{stop();setEditing(!editing);setReference(sentence.text);setStart(sentence.start.toFixed(2));setEnd(sentence.end.toFixed(2));}}>校正参考文本／时间</button>
         </div>

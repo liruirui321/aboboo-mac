@@ -5,6 +5,8 @@ const page=await browser.newPage(); page.setDefaultTimeout(15000); const errors=
 await page.addInitScript(()=>{
 const rate=8000,n=rate*8,ab=new ArrayBuffer(44+n*2),v=new DataView(ab); const str=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,n*2,true);for(let i=0;i<n;i++)v.setInt16(44+i*2,Math.sin(i*2*Math.PI*220/rate)*1000,true);
 window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__saved=null;window.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+if(cmd==='submission_list')return {records:window.__submissions||[],warnings:[]};
+if(cmd==='submission_record'){if(window.__failSubmission)throw Error('Test disk unavailable');window.__submissions||=[];window.__submissions.push(args.record);return;}
 if(cmd==='library_list')return Object.entries(window.__library||{}).map(([id,doc])=>({id,name:doc.name,duration:doc.duration,sentenceCount:doc.dictation.sentences.length,completed:doc.dictation.sentences.filter(s=>s.submitted).length,favorites:(doc.favorites||[]).length}));
 if(cmd==='library_add'){const doc=JSON.parse(args.document);window.__library||={};window.__library[doc.id]=doc;return doc.id;}
 if(cmd==='library_open')return JSON.stringify({...window.__library[args.id],libraryId:args.id});
@@ -133,5 +135,27 @@ await page.locator('.material-row').click();
 if(await page.getByLabel('听写答案',{exact:true}).inputValue()!=='The library opens at nine.')throw Error('Library progress not restored');
 if(!(await page.getByLabel('批改结果').innerText()).includes('全部正确'))throw Error('Library submission not restored');
 if (await page.getByRole('alert').count()) throw Error(await page.getByRole('alert').innerText());
-await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore'],errors},null,2)); if(errors.length)process.exit(1);
+await page.getByRole('button',{name:'听写练习',exact:true}).click().catch(()=>{});
+if(await page.getByLabel('听写答案',{exact:true}).count()){
+ await page.getByLabel('听写答案',{exact:true}).fill('unsaved answer');
+ const before=await page.evaluate(()=>window.__submissions.length);
+ await page.evaluate(()=>window.__failSubmission=true);
+ await page.getByRole('button',{name:'提交批改',exact:true}).click();
+ await page.getByText(/提交未保存，请重试/).waitFor();
+ if(await page.evaluate(()=>window.__submissions.length)!==before)throw Error('Failed submission was counted');
+ await page.evaluate(()=>window.__failSubmission=false);
+}
+await page.getByRole('button',{name:'提交轨迹分析',exact:true}).click();
+await page.getByRole('heading',{name:'提交轨迹 · 智能分析'}).waitFor();
+await page.waitForFunction(()=>document.body.innerText.includes('旧版本只保留'));
+const captured=await page.evaluate(()=>window.__submissions);
+if(!captured.length||captured.some(r=>!r.submittedAt||r.recovered))throw Error('Submission snapshots missing');
+if(!captured.some(r=>r.answer==='The shop opens at nine'))throw Error('Original wrong answer was overwritten');
+const analysis=await page.evaluate(async()=>{
+ const {analyze}=await import('/src/services/submissions.ts');
+ const base={id:'1',projectId:'p',projectName:'p',sentenceId:'s',start:0,end:2,attempt:1,submittedAt:'2026-01-01T00:00:00Z',recovered:false,assisted:false};
+ return analyze([{...base,expected:'the library opens',answer:'shop opens'},{...base,id:'2',attempt:2,submittedAt:'2026-01-02T00:00:00Z',expected:'the library opens',answer:'the library opens'}]);
+});
+if(analysis.missing!==1||analysis.wrong!==1||analysis.improved!==1||analysis.retries!==1)throw Error('Analysis counts or retry trend wrong');
+await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore','immutable submission snapshots','missing/wrong analysis and retry improvement'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

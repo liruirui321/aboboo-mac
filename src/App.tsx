@@ -11,13 +11,15 @@ import { Timeline } from './components/Timeline/Timeline';
 import { Favorites } from './components/Dictation/Favorites';
 import { Dictation } from './components/Dictation/Dictation';
 import { MaterialLibrary } from './components/Library/MaterialLibrary';
+import { history } from './services/submissions';
+import { SubmissionAnalysis } from './components/Analysis/SubmissionAnalysis';
 import { Transport } from './components/Player/Transport';
 
 export default function App() {
   const { project, setProject, setBlobUrl, setBlobUrls, recordingBlobs, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
 
-  const [mode, setMode] = useState<'audio'|'dictation'|'favorites'|'library'>('library');
+  const [mode, setMode] = useState<'audio'|'dictation'|'favorites'|'library'|'analysis'>('library');
   const [asrBusy,setAsrBusy] = useState(false);
   useEffect(()=>{if(!project)return;const key='aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2);if(project.favorites===undefined){try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(saved))useProjectStore.getState().updateProject({favorites:saved});}catch{}}},[project?.id]);
   useEffect(()=>{if(!project?.favorites)return;try{localStorage.setItem('aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2),JSON.stringify(project.favorites));}catch{}},[project?.favorites]);
@@ -25,6 +27,7 @@ export default function App() {
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
   useEffect(()=>{if(project?.libraryId){invoke('library_save_progress',{id:project.libraryId,progress:{dictation:project.dictation,favorites:project.favorites,dictationBackups:project.dictationBackups}}).catch(e=>setError('材料库进度保存失败：'+String(e)));}},[project?.dictation,project?.favorites,project?.dictationBackups,project?.libraryId]);
+  useEffect(()=>{history(project).catch(e=>setError('旧提交记录收集失败：'+String(e)));},[project?.id]);
   const reportError = (error: unknown) => setError('操作失败：' + String(error));
 
   const handleOpenFile = async () => {
@@ -131,6 +134,7 @@ export default function App() {
       <div className="app-toolbar">
         <span className="app-brand">Aboboo <small>社区版</small></span>
         <button style={toolbarBtn} disabled={asrBusy||!!loading||usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('library');}}>材料库</button>
+        <button style={toolbarBtn} disabled={asrBusy||!!loading} onClick={()=>{audioEngine.stop();setMode('analysis');}}>提交轨迹分析</button>
         <button onClick={() => handleOpenFile().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
         <button onClick={() => handleLoadProject().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
         <button onClick={() => handleSave().catch(reportError)} disabled={asrBusy || !!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
@@ -145,7 +149,7 @@ export default function App() {
       {loading && <div role="status" style={{padding:12, color:'#a9cfff'}}>{loading}</div>}
       {error && <div role="alert" style={{padding:12, color:'#ffb4ab'}} onClick={() => setError('')}>{error}（点击关闭）</div>}
       {/* Timeline */}
-      {mode==='library'?<MaterialLibrary onOpen={openMaterial}/>:project ? (
+      {mode==='analysis'?<SubmissionAnalysis/>:mode==='library'?<MaterialLibrary onOpen={openMaterial}/>:project ? (
         mode==='dictation'?<Dictation onBusy={setAsrBusy}/>:mode==='favorites'?<Favorites/>:<Timeline />
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 16 }}>
