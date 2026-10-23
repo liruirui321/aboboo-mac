@@ -5,11 +5,16 @@ const page=await browser.newPage(); page.setDefaultTimeout(15000); const errors=
 await page.addInitScript(()=>{
 const rate=8000,n=rate*8,ab=new ArrayBuffer(44+n*2),v=new DataView(ab); const str=(o,s)=>[...s].forEach((c,i)=>v.setUint8(o+i,c.charCodeAt(0)));str(0,'RIFF');v.setUint32(4,36+n*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,n*2,true);for(let i=0;i<n;i++)v.setInt16(44+i*2,Math.sin(i*2*Math.PI*220/rate)*1000,true);
 window.__TAURI_EVENT_PLUGIN_INTERNALS__={unregisterListener:()=>{}};window.__saved=null;window.__TAURI_INTERNALS__={transformCallback:()=>1,unregisterCallback:()=>{},invoke:async(cmd,args)=>{
+if(cmd==='library_list')return Object.entries(window.__library||{}).map(([id,doc])=>({id,name:doc.name,duration:doc.duration,sentenceCount:doc.dictation.sentences.length,completed:doc.dictation.sentences.filter(s=>s.submitted).length,favorites:(doc.favorites||[]).length}));
+if(cmd==='library_add'){const doc=JSON.parse(args.document);window.__library||={};window.__library[doc.id]=doc;return doc.id;}
+if(cmd==='library_open')return JSON.stringify({...window.__library[args.id],libraryId:args.id});
+if(cmd==='library_save_progress'){Object.assign(window.__library[args.id],args.progress);return;}
+
 if(cmd==='plugin:event|listen')return 1;
 if(cmd==='plugin:event|unlisten'||cmd==='plugin:fs|mkdir')return;
 if(cmd==='plugin:path|resolve_directory')return '/tmp/aboboo-cache';
 if(cmd==='plugin:path|join')return args.paths.join('/');
-if(cmd==='transcribe_audio')return [{start:0,end:2,text:'The library opens at nine.'},{start:3,end:6,text:'Please bring your student card.'}];
+if(cmd==='transcribe_audio')return {segments:[{start:0,end:2,text:'The library opens at nine.'},{start:3,end:6,text:'Please bring your student card.'}],source:'Test aligned sentences'};
 if(cmd==='inspect_audio_file'){if(window.__cloud)throw Error('此音频是云端占位文件');return ab.byteLength;}
 if(cmd==='plugin:dialog|open')return args.options.filters[0].extensions[0]==='abmac'?'/tmp/test.abmac':'/tmp/test.wav';
 if(cmd==='plugin:dialog|save')return '/tmp/test.abmac';
@@ -57,6 +62,13 @@ await page.getByLabel('听写答案',{exact:true}).waitFor().catch(async e=>{con
 if(await page.getByLabel('参考答案',{exact:true}).count())throw Error('Answer not hidden');
 await page.getByRole('button',{name:'播放本句',exact:true}).click();await page.waitForTimeout(2300);
 if(await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Sentence did not stop');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');await page.waitForTimeout(350);
+await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');
+const paused=await page.evaluate(async()=>{const e=(await import('/src/services/audioEngine.ts')).audioEngine;return {time:e.getCurrentTime(),playing:e.isPlaying()};});
+if(paused.playing||paused.time<0.2)throw Error('Pause shortcut failed');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowRight');
+if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Next shortcut failed');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
 await page.getByLabel('听写答案',{exact:true}).fill('The shop opens at nine');
 await page.getByRole('button',{name:'提交批改',exact:true}).click();
 if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH});
@@ -100,6 +112,16 @@ await page.getByRole('button',{name:'▶',exact:true}).click();await page.waitFo
 const normalTime=await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.getCurrentTime());
 if(normalTime<0.5||normalTime>1.1)throw Error('Playback rate leaked between modes '+normalTime);
 await page.getByRole('button',{name:'⏸',exact:true}).click();
+await page.getByRole('button',{name:'加入材料库',exact:true}).click();
+await page.getByRole('button',{name:'已加入材料库',exact:true}).waitFor();
+await page.getByRole('button',{name:'材料库',exact:true}).click();
+await page.locator('.material-row').click();
+await page.getByLabel('听写答案',{exact:true}).fill('The library opens at nine.');
+await page.getByLabel('听写答案',{exact:true}).press('Control+Enter');
+await page.getByRole('button',{name:'材料库',exact:true}).click();
+await page.locator('.material-row').click();
+if(await page.getByLabel('听写答案',{exact:true}).inputValue()!=='The library opens at nine.')throw Error('Library progress not restored');
+if(!(await page.getByLabel('批改结果').innerText()).includes('全部正确'))throw Error('Library submission not restored');
 if (await page.getByRole('alert').count()) throw Error(await page.getByRole('alert').innerText());
-await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards'],errors},null,2)); if(errors.length)process.exit(1);
+await browser.close(); console.log(JSON.stringify({passed:errors.length===0,checks:['cloud placeholder error and recovery','import WAV','play/pause','self-contained save/reopen','synthetic microphone recording','save/reopen recorded track','A–B repeat','0.5x timeline','Space shortcut','mocked ASR to hidden dictation','sentence playback boundary','word correction and missing/extra grading','wrong sentence filter','favorite deduplication','flashcard cloze/flip/notes/mastery','save and restore dictation and cards','pause/next/submit keyboard workflow','library one-click open and progress restore'],errors},null,2)); if(errors.length)process.exit(1);
 })().catch(e=>{console.error(e);process.exit(1)});

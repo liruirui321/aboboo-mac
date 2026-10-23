@@ -12,6 +12,10 @@ pub fn run() {
             commands::project::inspect_audio_file,
             commands::transcribe::transcribe_audio,
             commands::transcribe::cancel_transcription,
+            commands::library::library_list,
+            commands::library::library_open,
+            commands::library::library_add,
+            commands::library::library_save_progress,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

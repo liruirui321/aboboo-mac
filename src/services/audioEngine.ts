@@ -139,6 +139,10 @@ export class AudioEngine {
     if (gain) gain.gain.value = muted ? 0 : volume;
   }
 
+  retainBuffers(ids:string[]) {
+    const keep=new Set(ids);for(const id of this.buffers.keys())if(!keep.has(id))this.buffers.delete(id);
+  }
+
   dispose() {
     this.stop();
     this.ctx?.close();

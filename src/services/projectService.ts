@@ -11,6 +11,13 @@ export class ProjectService {
     });
     if (!filePath) return null;
 
+    const json = await this.serialize(project,recordingBlobs);
+    const encoder = new TextEncoder();
+    await writeFile(filePath, encoder.encode(json));
+    return filePath;
+  }
+
+  async serialize(project:Project,recordingBlobs:Map<string,Blob>):Promise<string>{
     const embeddedAudio: Record<string, { data: string; mime: string }> = {};
     for (const track of project.tracks) {
       const blob = recordingBlobs.get(track.id);
@@ -25,9 +32,7 @@ export class ProjectService {
     };
 
     const json = JSON.stringify(updatedProject, null, 2);
-    const encoder = new TextEncoder();
-    await writeFile(filePath, encoder.encode(json));
-    return filePath;
+    return json;
   }
 
   async loadProject(): Promise<{ project: Project; blobUrls: Map<string, string>; recordingBlobs: Map<string, Blob> } | null> {
@@ -38,6 +43,10 @@ export class ProjectService {
     if (!filePath || typeof filePath !== 'string') return null;
 
     const json = await readTextFile(filePath);
+    const result=this.parse(json);delete result.project.libraryId;return result;
+  }
+
+  parse(json:string):{project:Project;blobUrls:Map<string,string>;recordingBlobs:Map<string,Blob>}{
     const document = JSON.parse(json);
     if (document.format !== 'aboboo-community-v1' || !Array.isArray(document.tracks) || !document.embeddedAudio) {
       throw new Error('请选择本社区版保存的 .abmac 项目；不支持官方 Aboboo 课件。');

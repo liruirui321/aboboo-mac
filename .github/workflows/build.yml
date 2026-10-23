@@ -19,9 +19,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: actions/cache@v4
         with:
-          path: src-tauri/resources/asr
-          key: asr-${{ runner.os }}-${{ runner.arch }}-small-q5-v174-${{ hashFiles('scripts/setup-asr.sh') }}
+          path: src-tauri/resources
+          key: asr-${{ runner.os }}-${{ runner.arch }}-small-q5-v174-${{ hashFiles('scripts/setup-*.sh') }}
       - run: bash scripts/setup-asr.sh
+      - run: bash scripts/setup-llm.sh
       - run: npm ci
       - run: npx playwright install chromium
       - name: Browser smoke tests
@@ -36,6 +37,7 @@ jobs:
       - name: Sign and archive
         run: |
           codesign --force --sign - 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/asr/whisper-cli'
+          for file in 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/llm/'*.dylib 'target/release/bundle/macos/Aboboo Community.app/Contents/Resources/resources/llm/llama-completion'; do codesign --force --sign - "$file"; done
           codesign --force --deep --sign - --entitlements src-tauri/entitlements.plist 'target/release/bundle/macos/Aboboo Community.app'
           codesign --verify --deep --strict 'target/release/bundle/macos/Aboboo Community.app'
           ditto -c -k --sequesterRsrc --keepParent 'target/release/bundle/macos/Aboboo Community.app' Aboboo-Community-macOS.zip

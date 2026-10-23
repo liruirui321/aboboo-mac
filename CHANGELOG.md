@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-10-23
+
+- Add a local material library with one-click dictation and per-material progress/favorites.
+- Align transcript words to audio, then validate local Qwen LLM sentence boundaries; preserve full stops and fall back explicitly when needed.
+- Add Option/Alt + Space to pause/resume, Option/Alt + arrows to navigate, and Command/Ctrl + Enter to submit.
+- Keep previous dictation data when resegmenting; carry over exact sentence matches.
+- Release unused audio buffers when switching materials.
+
+
 ## 0.3.1 — 2026-10-23
 
 - Switch the app, dictation waveforms and flashcards to a blue-black theme while preserving the classic workspace layout.

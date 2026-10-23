@@ -1,11 +1,9 @@
-use serde::Serialize;
+use super::segmentation::{Segment,Segmentation,segment_words};
 use std::{fs, process::{Command, Stdio}, sync::atomic::{AtomicBool, Ordering}, time::{Duration, Instant}};
 use tauri::{Emitter, Manager};
 
 #[derive(Default)]
 pub struct AsrState { running: AtomicBool, cancel: AtomicBool }
-#[derive(Serialize)]
-pub struct Segment { start: f64, end: f64, text: String }
 
 #[tauri::command]
 pub fn cancel_transcription(app: tauri::AppHandle) { app.state::<AsrState>().cancel.store(true, Ordering::SeqCst); }
@@ -33,7 +31,7 @@ fn spans(wav: &[u8]) -> Result<Vec<(usize, usize)>, String> {
     Ok(ranges)
 }
 
-fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Vec<Segment>,String> {
+fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Segmentation,String> {
     let state=app.state::<AsrState>();
     let cache=app.path().app_cache_dir().map_err(|e|e.to_string())?;
     let input=cache.join(format!("asr-input-{id}.wav"));
@@ -57,7 +55,7 @@ fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Vec<Seg
             clip.extend_from_slice(&wav[44+start*2..44+end*2]); fs::write(&audio,clip).map_err(|e|e.to_string())?;
             let log=fs::File::create(dir.join(format!("{n}.log"))).map_err(|e|e.to_string())?;
             let mut child=Command::new(&cli).args(["-m"]).arg(&model).arg("-f").arg(&audio)
-                .args(["-l",language,"-mc","0","-oj","-ml","100","-sow","-of"]).arg(&output)
+                .args(["-l",language,"-mc","0","-oj","-ml","1","-sow","-of"]).arg(&output)
                 .stdout(Stdio::null()).stderr(Stdio::from(log)).spawn().map_err(|e|format!("无法启动离线识别：{e}"))?;
             let began=Instant::now();
             let status=loop {
@@ -74,17 +72,18 @@ fn recognize(app: &tauri::AppHandle, id: &str, language: &str) -> Result<Vec<Seg
                 if text.is_empty() || (text.starts_with('[')&&text.ends_with(']')) { continue; }
                 let begin=s["offsets"]["from"].as_f64().unwrap_or(0.0)/1000.0 + *start as f64/16000.0;
                 let finish=(s["offsets"]["to"].as_f64().unwrap_or(0.0)/1000.0 + *start as f64/16000.0).min(*end as f64/16000.0);
-                if finish>begin { all.push(Segment{start:begin,end:finish,text:text.to_string()}); }
+                if finish>=begin { all.push(Segment{start:begin,end:finish,text:text.to_string()}); }
             }
         }
         if all.is_empty() {return Err("没有识别到文本，请换一种识别语言或检查音频。".into());}
-        Ok(all)
+        let llm=app.path().resource_dir().map_err(|e|e.to_string())?.join("resources/llm");
+        segment_words(all,&llm,&dir,&state.cancel,|message|{let _=app.emit("transcription-progress",message);})
     })();
     let _=fs::remove_file(input); let _=fs::remove_dir_all(dir); result
 }
 
 #[tauri::command]
-pub async fn transcribe_audio(app: tauri::AppHandle, id: String, language: String) -> Result<Vec<Segment>,String> {
+pub async fn transcribe_audio(app: tauri::AppHandle, id: String, language: String) -> Result<Segmentation,String> {
     uuid::Uuid::parse_str(&id).map_err(|_|"识别任务编号无效")?;
     if !["en","zh","auto"].contains(&language.as_str()) { return Err("识别语言无效".into()); }
     let state=app.state::<AsrState>();

@@ -22,8 +22,10 @@ export interface Project {
   duration: number;
   tracks: Track[];
   metadata: ProjectMetadata;
+  libraryId?: string;
+  dictationBackups?: Array<{sentences:Sentence[];index:number;source:string}>;
   favorites?: Favorite[];
-  dictation?: { sentences: Sentence[]; index: number; source: string };
+  dictation?: { sentences: Sentence[]; index: number; source: string; words?: Array<{start:number;end:number;text:string}>; segmentationVersion?:number };
 }
 
 export interface Sentence { id:string; start:number; end:number; text:string; answer:string; submitted:boolean; revealed:boolean; attempts:number; }

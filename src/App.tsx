@@ -10,19 +10,21 @@ import { usePlayerStore } from './stores/playerStore';
 import { Timeline } from './components/Timeline/Timeline';
 import { Favorites } from './components/Dictation/Favorites';
 import { Dictation } from './components/Dictation/Dictation';
+import { MaterialLibrary } from './components/Library/MaterialLibrary';
 import { Transport } from './components/Player/Transport';
 
 export default function App() {
   const { project, setProject, setBlobUrl, setBlobUrls, recordingBlobs, addRecordingBlob } = useProjectStore();
   const { setDuration, setCurrentTime } = usePlayerStore();
 
-  const [mode, setMode] = useState<'audio'|'dictation'|'favorites'>('audio');
+  const [mode, setMode] = useState<'audio'|'dictation'|'favorites'|'library'>('library');
   const [asrBusy,setAsrBusy] = useState(false);
   useEffect(()=>{if(!project)return;const key='aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2);if(project.favorites===undefined){try{const saved=JSON.parse(localStorage.getItem(key)||'null');if(Array.isArray(saved))useProjectStore.getState().updateProject({favorites:saved});}catch{}}},[project?.id]);
   useEffect(()=>{if(!project?.favorites)return;try{localStorage.setItem('aboboo-favorites:'+project.originalAudioPath+':'+project.duration.toFixed(2),JSON.stringify(project.favorites));}catch{}},[project?.favorites]);
 
   const [loading, setLoading] = useState('');
   const [error, setError] = useState('');
+  useEffect(()=>{if(project?.libraryId){invoke('library_save_progress',{id:project.libraryId,progress:{dictation:project.dictation,favorites:project.favorites,dictationBackups:project.dictationBackups}}).catch(e=>setError('材料库进度保存失败：'+String(e)));}},[project?.dictation,project?.favorites,project?.dictationBackups,project?.libraryId]);
   const reportError = (error: unknown) => setError('操作失败：' + String(error));
 
   const handleOpenFile = async () => {
@@ -64,7 +66,9 @@ export default function App() {
       audioEngine.stop();
       useProjectStore.getState().clear();
       usePlayerStore.getState().setIsPlaying(false);
+      audioEngine.retainBuffers(newProject.tracks.map(t=>t.id));
       setProject(newProject);
+      setMode('audio');
       setBlobUrl(newProject.tracks[0].id, url);
       addRecordingBlob(newProject.tracks[0].id, blob);
       url = null;
@@ -84,6 +88,10 @@ export default function App() {
   const handleLoadProject = async () => {
     const result = await projectService.loadProject();
     if (!result) return;
+    await loadResult(result);
+  };
+
+  const loadResult = async (result:NonNullable<Awaited<ReturnType<typeof projectService.loadProject>>>) => {
     const { project: loaded, blobUrls } = result;
 
     audioEngine.stop();
@@ -99,10 +107,22 @@ export default function App() {
       }
     }
 
+    audioEngine.retainBuffers(loaded.tracks.map(t=>t.id));
     setProject(loaded);
     setBlobUrls(blobUrls);
     setDuration(loaded.duration);
     setCurrentTime(0);
+  };
+
+  const openMaterial=async(id:string)=>{
+    setLoading('正在打开材料…');setError('');
+    try{await loadResult(projectService.parse(await invoke<string>('library_open',{id})));setMode('dictation');}
+    finally{setLoading('');}
+  };
+  const addMaterial=async()=>{
+    if(!project)return;setLoading('正在保存到材料库…');
+    try{const document=await projectService.serialize(project,recordingBlobs);const id=await invoke<string>('library_add',{document});useProjectStore.getState().updateProject({libraryId:id});}
+    finally{setLoading('');}
   };
 
   return (
@@ -110,9 +130,11 @@ export default function App() {
       {/* Toolbar */}
       <div className="app-toolbar">
         <span className="app-brand">Aboboo <small>社区版</small></span>
+        <button style={toolbarBtn} disabled={asrBusy||!!loading||usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('library');}}>材料库</button>
         <button onClick={() => handleOpenFile().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开音频</button>
         <button onClick={() => handleLoadProject().catch(reportError)} disabled={asrBusy || !!loading || usePlayerStore.getState().isRecording} style={toolbarBtn}>打开项目</button>
         <button onClick={() => handleSave().catch(reportError)} disabled={asrBusy || !!loading || !project || usePlayerStore.getState().isRecording} style={toolbarBtn}>保存项目</button>
+        {project&&<button style={toolbarBtn} disabled={asrBusy||!!loading||!!project.libraryId||!project.dictation?.sentences.length} onClick={()=>addMaterial().catch(reportError)}>{project.libraryId?'已加入材料库':'加入材料库'}</button>}
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode(mode==='dictation'?'audio':'dictation');}}>{mode==='dictation'?'音频／跟读':'听写练习'}</button>}
         {project && <button style={toolbarBtn} disabled={asrBusy || usePlayerStore.getState().isRecording} onClick={()=>{audioEngine.stop();usePlayerStore.getState().setIsPlaying(false);setMode('favorites');}}>收藏词卡 ({project.favorites?.length||0})</button>}
         {project && (
@@ -123,7 +145,7 @@ export default function App() {
       {loading && <div role="status" style={{padding:12, color:'#a9cfff'}}>{loading}</div>}
       {error && <div role="alert" style={{padding:12, color:'#ffb4ab'}} onClick={() => setError('')}>{error}（点击关闭）</div>}
       {/* Timeline */}
-      {project ? (
+      {mode==='library'?<MaterialLibrary onOpen={openMaterial}/>:project ? (
         mode==='dictation'?<Dictation onBusy={setAsrBusy}/>:mode==='favorites'?<Favorites/>:<Timeline />
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontSize: 16 }}>

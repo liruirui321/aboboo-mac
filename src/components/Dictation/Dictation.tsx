@@ -23,7 +23,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   const original=project?.tracks.find(t=>t.type==='original');
   const key=project ? 'aboboo-dictation:'+project.originalAudioPath+':'+project.duration.toFixed(2) : '';
   const failure=(e:unknown)=>setError(String(e));
-  const stop=()=>{audioEngine.pause();setPlaying(false);};
+  const stop=()=>{audioEngine.pause();setPosition(audioEngine.getCurrentTime());setPlaying(false);};
   useEffect(()=>{if(!project)return; if(!project.dictation){try{const stored=JSON.parse(localStorage.getItem(key)||'null');if(stored&&Array.isArray(stored.sentences)&&stored.sentences.length)updateProject({dictation:stored});}catch{/* ignore corrupt local cache */}}return ()=>{audioEngine.pause();};},[project?.id]);
   useEffect(()=>{if(project?.dictation){try{localStorage.setItem(key,JSON.stringify(project.dictation));}catch{setError('本机进度缓存空间不足，请使用“保存项目”保存进度。');}}},[project?.dictation]);
   useEffect(()=>{onBusy(busy);return()=>onBusy(false);},[busy,onBusy]);
@@ -34,12 +34,26 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
     const reveal=()=>{const row=box.querySelector('tr.selected');if(!row)return;const r=row.getBoundingClientRect(),b=box.getBoundingClientRect();if(r.bottom>b.bottom)box.scrollTop+=r.bottom-b.bottom;else if(r.top<b.top+28)box.scrollTop-=b.top+28-r.top;};
     reveal();const observer=new ResizeObserver(reveal);observer.observe(box);return()=>observer.disconnect();
   },[index,wrongOnly,items.length]);
+  useEffect(()=>{
+    const handle=(e:KeyboardEvent)=>{
+      if(e.defaultPrevented||e.repeat||busy||editing||!sentence||!original)return;
+      if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='Space'){e.preventDefault();togglePlayback().catch(failure);}
+      else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowRight'){e.preventDefault();next(1);inputRef.current?.focus();}
+      else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowLeft'){e.preventDefault();next(-1);inputRef.current?.focus();}
+      else if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}
+    };window.addEventListener('keydown',handle);return()=>window.removeEventListener('keydown',handle);
+  });
   if(!project||!original)return null;
   const update=(changes:Partial<Sentence>)=>{if(!sentence)return;updateProject({dictation:{...project.dictation!,sentences:items.map((s,i)=>i===index?{...s,...changes}:s)}});};
   const choose=(i:number)=>{stop();updateProject({dictation:{...project.dictation!,index:i}});};
   const visible=items.map((s,i)=>({s,i})).filter(({s})=>!wrongOnly||(s.submitted&&!grade(s.text,s.answer).correct));
   const next=(direction:number)=>{const at=visible.findIndex(v=>v.i===index);const item=visible[at+direction];if(item)choose(item.i);};
   const play=async()=>{if(!sentence)return;stop();setError('');await audioEngine.playRange(original.id,sentence.start,sentence.end,rate);setPosition(sentence.start);setPlaying(true);inputRef.current?.focus();};
+  const togglePlayback=async()=>{
+    if(!sentence)return;if(audioEngine.isPlaying()){stop();return;}
+    const at=audioEngine.getCurrentTime();const offset=at>=sentence.start&&at<sentence.end-.05?at:sentence.start;
+    await audioEngine.playRange(original.id,offset,sentence.end,rate);setPlaying(true);inputRef.current?.focus();
+  };
   const favorite=(kind:'word'|'sentence',text:string)=>{
     if(!sentence)return;const favorites=project.favorites||[];
     if(favorites.some(f=>f.kind===kind&&f.text.toLowerCase()===text.toLowerCase()&&f.start===sentence.start)){setStatus('已经在收藏中');return;}
@@ -52,9 +66,10 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
       unlisten=await listen<string>('transcription-progress',e=>setStatus(e.payload));
       const bytes=await audioEngine.exportWav(original.id);const id=crypto.randomUUID();const dir=await appCacheDir();await mkdir(dir,{recursive:true});await writeFile(await join(dir,`asr-input-${id}.wav`),bytes);
       setStatus('正在本机提取字幕…');
-      const result=await invoke<Array<{start:number;end:number;text:string}>>('transcribe_audio',{id,language});
-      const list=sentences(result,project.duration);if(!list.length)throw Error('没有可用的语音片段。');
-      updateProject({dictation:{sentences:list,index:0,source:'Whisper small · 自动识别，允许校正'}});setWrongOnly(false);setStatus(`已生成 ${list.length} 个听写片段`);
+      const result=await invoke<{segments:Array<{start:number;end:number;text:string}>;words?:Array<{start:number;end:number;text:string}>;source:string}>('transcribe_audio',{id,language});
+      const list=sentences(result.segments,project.duration);if(!list.length)throw Error('没有可用的语音片段。');
+      const restored=list.map(s=>{const old=items.find(o=>o.text.toLowerCase()===s.text.toLowerCase());return old?{...s,answer:old.answer,submitted:old.submitted,revealed:old.revealed,attempts:old.attempts}:s;});
+      updateProject({dictationBackups:project.dictation?[...(project.dictationBackups||[]),project.dictation].slice(-3):project.dictationBackups,dictation:{sentences:restored,index:0,source:result.source,words:result.words,segmentationVersion:2}});setWrongOnly(false);setStatus(`已生成 ${list.length} 个完整单句${items.length?'；原进度已随项目备份':''}`);
     }catch(e){failure(e);}finally{unlisten?.();setBusy(false);}
   };
   const importSubs=async()=>{const path=await open({filters:[{name:'SRT 字幕',extensions:['srt']}],multiple:false});if(typeof path!=='string')return;const list=parseSrt(await readTextFile(path),project.duration);if(!list.length)throw Error('字幕无有效时间轴。');updateProject({dictation:{sentences:list,index:0,source:'导入字幕'}});};
@@ -68,7 +83,7 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
     <div className="study-toolbar">
       <strong className="study-mode">单句听写</strong>
       <select aria-label="识别语言" value={language} disabled={busy} onChange={e=>setLanguage(e.target.value)}><option value="en">英语</option><option value="zh">中文</option><option value="auto">自动检测</option></select>
-      <button disabled={busy||items.length>0} onClick={()=>void transcribe()}>自动提取字幕</button>
+      <button disabled={busy} onClick={()=>void transcribe()}>{items.length?'重新按单句拆分':'自动提取字幕'}</button>
       {!items.length&&<button disabled={busy} onClick={()=>importSubs().catch(failure)}>导入 SRT</button>}
       {busy&&<button onClick={()=>invoke('cancel_transcription').catch(failure)}>取消识别</button>}
       {!!items.length&&<button onClick={()=>exportSubs().catch(failure)}>导出字幕</button>}
@@ -96,21 +111,21 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
       {sentence&&<>
         <div className="sentence-controls">
           <strong>第 {index+1} / {items.length} 句</strong>
-          <button disabled={cursor<=0} onClick={()=>next(-1)}>上一句</button>
-          <button className="play-sentence" onClick={()=>play().catch(failure)}>播放本句</button><button disabled={!playing} onClick={stop}>暂停本句</button>
-          <button disabled={cursor<0||cursor>=visible.length-1} onClick={()=>next(1)}>下一句</button>
+          <button aria-label="上一句" title="Option + ←" disabled={cursor<=0} onClick={()=>next(-1)}>上一句</button>
+          <button title="从句首重听" className="play-sentence" onClick={()=>play().catch(failure)}>播放本句</button><button aria-label="暂停本句" title="Option + 空格：播放／暂停" onClick={()=>togglePlayback().catch(failure)}>{playing?'暂停':'继续播放'}<small className="shortcut-hint">⌥ Space</small></button>
+          <button aria-label="下一句" title="Option + →" disabled={cursor<0||cursor>=visible.length-1} onClick={()=>next(1)}>下一句<small className="shortcut-hint">⌥ →</small></button>
           <label><input type="checkbox" checked={repeat} onChange={e=>setRepeat(e.target.checked)}/>循环本句</label>
           <select aria-label="听写速度" value={rate} onChange={e=>{stop();setRate(Number(e.target.value));}}>{[0.5,0.75,1,1.25,1.5].map(r=><option key={r} value={r}>{r}×</option>)}</select>
           <span className="sentence-time">{stamp(position)} / {stamp(sentence.end)} <small>变速会变调</small></span>
         </div>
         <div className="writing-area">
-          <div className="writing-caption"><span>听写区</span><span>⌘/Ctrl + Enter 校对 · ⌘/Ctrl + Space 重听</span></div>
+          <div className="writing-caption"><span>听写区</span><span>⌥ Space 播放／暂停 · ⌥ → 下一句 · ⌘/Ctrl + Enter 提交</span></div>
           <textarea ref={inputRef} aria-label="听写答案" spellCheck={false} placeholder="听原音，在这里写下你听到的内容…" value={sentence.answer} onChange={e=>update({answer:e.target.value,submitted:false})}
             onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}if((e.metaKey||e.ctrlKey)&&e.code==='Space'){e.preventDefault();play().catch(failure);}if(e.key==='F1'){e.preventDefault();submit();}}}/>
           {hint&&<p aria-label="提示" className="initial-hint">{sentence.text.split(/\s+/).map(w=>w[0]+'＿'.repeat(Math.max(1,w.length-1))).join(' ')}</p>}
         </div>
         <div className="checking-toolbar">
-          <button className="primary" onClick={submit}>提交批改</button>
+          <button aria-label="提交批改" className="primary" onClick={submit}>提交批改<small className="shortcut-hint">⌘ Enter</small></button>
           <button onClick={()=>setHint(!hint)}>首字母提示</button>
           <button onClick={()=>update({revealed:!sentence.revealed})}>{sentence.revealed?'隐藏答案':'显示答案'}</button>
           <button onClick={()=>{update({answer:'',submitted:false,revealed:false});setHint(false);}}>重新听写</button>
