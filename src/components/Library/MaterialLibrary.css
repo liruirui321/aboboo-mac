@@ -1,0 +1,12 @@
+.material-library .library-filter{gap:8px;flex-wrap:wrap;margin:14px 0}
+.material-library .library-filter select{min-width:110px;max-width:190px;padding:7px 10px;background:#111e2d;border:1px solid #304760;border-radius:4px;color:#d4e5f7;font:inherit;font-size:13px}
+.material-library .library-filter input{min-width:150px;max-width:none;padding:7px 10px;font-size:13px}
+.material-library .library-filter button{padding:7px 10px;white-space:nowrap}
+.material-library .library-list{gap:4px}
+.material-library .library-list .material-row{min-height:42px;padding:9px 12px;gap:12px}
+.material-library .material-icon{font-size:18px}
+.material-library .material-name strong{font-size:13px}
+.material-library .material-duration{color:#879fbd;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.material-library .material-action{white-space:nowrap;font-size:12px}
+.material-library .library-filter :focus-visible,.material-library .material-row:focus-visible{outline:2px solid #7cb6f3;outline-offset:2px}
+@media(max-width:900px){.material-library .library-filter input{flex-basis:180px}.material-library .library-list .material-row{gap:8px}}
