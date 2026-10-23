@@ -62,13 +62,23 @@ await page.getByLabel('听写答案',{exact:true}).waitFor().catch(async e=>{con
 if(await page.getByLabel('参考答案',{exact:true}).count())throw Error('Answer not hidden');
 await page.getByRole('button',{name:'播放本句',exact:true}).click();await page.waitForTimeout(2300);
 if(await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Sentence did not stop');
-await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');await page.waitForTimeout(350);
-await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+p');await page.waitForTimeout(350);
+await page.getByLabel('听写答案',{exact:true}).press('Alt+p');
 const paused=await page.evaluate(async()=>{const e=(await import('/src/services/audioEngine.ts')).audioEngine;return {time:e.getCurrentTime(),playing:e.isPlaying()};});
 if(paused.playing||paused.time<0.2)throw Error('Pause shortcut failed');
-await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowRight');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+Space');
 if(!(await page.locator('.sentence-controls strong').innerText()).includes('2 / 2'))throw Error('Next shortcut failed');
 await page.getByLabel('听写答案',{exact:true}).press('Alt+ArrowLeft');
+await page.getByLabel('听写答案',{exact:true}).fill('hello');
+await page.getByLabel('听写答案',{exact:true}).press('End');
+await page.getByLabel('听写答案',{exact:true}).press('Space');
+if(await page.getByLabel('听写答案',{exact:true}).inputValue()!=='hello ')throw Error('Typing space was intercepted');
+await page.getByLabel('听写答案',{exact:true}).press('Tab');
+await page.waitForTimeout(100);
+if(!await page.evaluate(async()=> (await import('/src/services/audioEngine.ts')).audioEngine.isPlaying()))throw Error('Tab replay failed');
+if(!await page.getByLabel('听写答案',{exact:true}).evaluate(el=>el===document.activeElement))throw Error('Tab lost answer focus');
+await page.getByLabel('听写答案',{exact:true}).press('Alt+p');
+
 await page.getByLabel('听写答案',{exact:true}).fill('The shop opens at nine');
 await page.getByRole('button',{name:'提交批改',exact:true}).click();
 if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH});

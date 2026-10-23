@@ -36,8 +36,12 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
   },[index,wrongOnly,items.length]);
   useEffect(()=>{
     const handle=(e:KeyboardEvent)=>{
-      if(e.defaultPrevented||e.repeat||busy||editing||!sentence||!original)return;
-      if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='Space'){e.preventDefault();togglePlayback().catch(failure);}
+      if(e.defaultPrevented||e.repeat||e.isComposing||busy||editing||!sentence||!original)return;
+      const target=e.target as HTMLElement|null;
+      const typing=!!target?.closest('input,textarea,select,[contenteditable="true"]');
+      if(e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&e.code==='Space'){e.preventDefault();next(1);inputRef.current?.focus();}
+      else if(!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&((!e.altKey&&!typing&&e.code==='Space')||(e.altKey&&e.code==='KeyP'))){e.preventDefault();togglePlayback().catch(failure);}
+      else if(!e.altKey&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&e.code==='Tab'&&(!typing||target===inputRef.current)){e.preventDefault();play().catch(failure);}
       else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowRight'){e.preventDefault();next(1);inputRef.current?.focus();}
       else if(e.altKey&&!e.metaKey&&!e.ctrlKey&&e.code==='ArrowLeft'){e.preventDefault();next(-1);inputRef.current?.focus();}
       else if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}
@@ -112,14 +116,14 @@ export function Dictation({onBusy}:{onBusy:(busy:boolean)=>void}) {
         <div className="sentence-controls">
           <strong>第 {index+1} / {items.length} 句</strong>
           <button aria-label="上一句" title="Option + ←" disabled={cursor<=0} onClick={()=>next(-1)}>上一句</button>
-          <button title="从句首重听" className="play-sentence" onClick={()=>play().catch(failure)}>播放本句</button><button aria-label="暂停本句" title="Option + 空格：播放／暂停" onClick={()=>togglePlayback().catch(failure)}>{playing?'暂停':'继续播放'}<small className="shortcut-hint">⌥ Space</small></button>
-          <button aria-label="下一句" title="Option + →" disabled={cursor<0||cursor>=visible.length-1} onClick={()=>next(1)}>下一句<small className="shortcut-hint">⌥ →</small></button>
+          <button title="Tab：从句首重听（Shift + Tab 切换焦点）" className="play-sentence" onClick={()=>play().catch(failure)}>播放本句</button><button aria-label="暂停本句" title="空格：播放／暂停（输入时用 Option + P）" onClick={()=>togglePlayback().catch(failure)}>{playing?'暂停':'继续播放'}<small className="shortcut-hint">⌥ P</small></button>
+          <button aria-label="下一句" title="Option + 空格" disabled={cursor<0||cursor>=visible.length-1} onClick={()=>next(1)}>下一句<small className="shortcut-hint">⌥ Space</small></button>
           <label><input type="checkbox" checked={repeat} onChange={e=>setRepeat(e.target.checked)}/>循环本句</label>
           <select aria-label="听写速度" value={rate} onChange={e=>{stop();setRate(Number(e.target.value));}}>{[0.5,0.75,1,1.25,1.5].map(r=><option key={r} value={r}>{r}×</option>)}</select>
           <span className="sentence-time">{stamp(position)} / {stamp(sentence.end)} <small>变速会变调</small></span>
         </div>
         <div className="writing-area">
-          <div className="writing-caption"><span>听写区</span><span>⌥ Space 播放／暂停 · ⌥ → 下一句 · ⌘/Ctrl + Enter 提交</span></div>
+          <div className="writing-caption"><span>听写区</span><span>Tab 重播 · ⌥ Space 下一句 · ⌥ P 暂停／继续 · ⌘/Ctrl Enter 提交（输入框内空格正常打字）</span></div>
           <textarea ref={inputRef} aria-label="听写答案" spellCheck={false} placeholder="听原音，在这里写下你听到的内容…" value={sentence.answer} onChange={e=>update({answer:e.target.value,submitted:false})}
             onKeyDown={e=>{if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){e.preventDefault();submit();}if((e.metaKey||e.ctrlKey)&&e.code==='Space'){e.preventDefault();play().catch(failure);}if(e.key==='F1'){e.preventDefault();submit();}}}/>
           {hint&&<p aria-label="提示" className="initial-hint">{sentence.text.split(/\s+/).map(w=>w[0]+'＿'.repeat(Math.max(1,w.length-1))).join(' ')}</p>}
